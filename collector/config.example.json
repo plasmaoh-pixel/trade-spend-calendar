@@ -1,0 +1,14 @@
+{
+  "WEBAPP_URL": "https://script.google.com/macros/s/XXXXXXXX/exec",
+  "WRITE_TOKEN": "setup() 실행 로그의 WRITE_TOKEN",
+  "WORK_DIR": "~/card_sms",
+  "FIRST_RUN_LOOKBACK_DAYS": 30,
+  "AUTO_GIT_PULL": true,
+
+  "KB_APP_KEY": "KB증권 Open API 앱키",
+  "KB_APP_SECRET": "KB증권 Open API 시크릿",
+  "KB_ACCOUNT": "계좌번호(하이픈 없이)",
+  "KB_ACCOUNT_PRODUCT": "01",
+  "SELL_TAX_RATE": 0.0020,
+  "FEE_RATE": 0.00015
+}

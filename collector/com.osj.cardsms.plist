@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  카드 문자 수집기 10분 주기 실행 (Copyright (c) OSJ)
+  1) USERNAME 을 맥미니 계정명으로 바꿉니다. (저장소를 ~/trade-spend-calendar 에 clone 했다고 가정)
+  2) cp collector/com.osj.cardsms.plist ~/Library/LaunchAgents/
+  3) launchctl load ~/Library/LaunchAgents/com.osj.cardsms.plist
+  4) /usr/bin/python3 에 '전체 디스크 접근 권한'이 있어야 chat.db 를 읽을 수 있습니다.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.osj.cardsms</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/USERNAME/trade-spend-calendar/collector/card_sms_collector.py</string>
+  </array>
+  <key>StartInterval</key><integer>600</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/USERNAME/card_sms/run.log</string>
+  <key>StandardErrorPath</key><string>/Users/USERNAME/card_sms/run.err</string>
+</dict>
+</plist>

@@ -54,19 +54,21 @@ GitHub Pages 링크로 어디서든 접속하고, **토큰을 넣어야만** 데
    - 실행할 때마다 `git pull`로 최신 코드를 받습니다 (`AUTO_GIT_PULL`).
 
 ### 4. 매매 데이터 (KB증권 자동 동기화)
-`collector/kb_trades_sync.py`가 체결내역과 잔고를 받아 **실현손익(이동평균법)**을 계산하고 `Trades` 시트에 넣습니다.
+`collector/kb_trades_sync.py`가 KB증권 Open API(B2C)로 **계좌별주문체결조회(SSQM2341)**와 **계좌자산평가(SSQM2952)**를 불러
+실현손익(이동평균법)을 계산하고 `Trades` 시트에 넣습니다. 요청 형식은 KB 공식 예제(kbsecurities/kb-openapi)와 같습니다.
 
-1. `config.local.json`에 `KB_APP_KEY`, `KB_APP_SECRET`, `KB_ACCOUNT` 입력
-2. **API 매핑 맞추기**: KB증권 API 문서에서 체결내역·잔고 조회의 경로·TR ID를 찾아 스크립트 `KB_API`의 ★ 항목에 입력
-   → `python3 collector/kb_trades_sync.py --raw` 로 응답 원문을 보고 `EXEC_FIELDS`·`BAL_FIELDS` 필드명을 맞춤
-3. 확인: `python3 collector/kb_trades_sync.py --dry` (시트로 보내지 않고 결과만 출력)
-4. 자동 실행: `com.osj.kbtrades.plist` 등록 → 평일 16:10에 그날 체결분 동기화
-5. 과거 내역 채우기: HTS/MTS에서 체결내역을 CSV로 저장 → `--import-csv 파일.csv --dry`로 확인 후 `--dry` 빼고 실행
+1. 앱키: `~/kb_swing_gpt/kb_swing/.env`의 `KB_OPENAPI_APP_KEY / SECRET`을 자동으로 읽습니다 (다른 곳이면 `config.local.json`의 `KB_ENV_FILE` 또는 `KB_APP_KEY / KB_APP_SECRET`).
+2. 확인: `python3 collector/kb_trades_sync.py --from 2026-10-01 --dry` (시트로 보내지 않고 결과만 출력)
+3. 첫 동기화: `--dry` 빼고 실행 → 그 기간 체결이 시트로 들어갑니다.
+4. 자동 실행: `com.osj.kbtrades.plist` 등록 → 평일 16:10, 마지막 동기화일부터 오늘까지
+5. 응답 구조 확인: `--raw` (최근 3영업일 체결 행 일부와 잔고 필드명 출력)
+6. 과거 내역: HTS/MTS 체결내역 CSV → `--import-csv 파일.csv --dry`
 
 **손익 계산 방식**
 - 매수: 평균단가 = (보유금액 + 매수금액 + 수수료) ÷ 총수량
 - 매도: 실현손익 = 수량 × (체결가 − 평균단가) − 수수료 − 제세금
-- API가 실현손익·수수료·세금 필드를 주면 그 값을 우선 사용합니다. 없으면 `FEE_RATE`, `SELL_TAX_RATE`로 추정합니다. **세율은 현행 기준으로 확인 후 수정하세요.**
+- 체결 조회에는 수수료·세금이 없어 `FEE_RATE`, `SELL_TAX_RATE`로 추정합니다. **세율은 현행 기준으로 확인 후 수정하세요.**
+- 첫 실행의 기준 평단은 KB 계좌자산평가의 매입평균가에서 해당 기간 체결을 되돌려 추정합니다.
 - 매 실행 후 실제 잔고로 평단 기준점을 다시 맞추므로 오차가 누적되지 않습니다. 이미 처리한 체결은 건너뜁니다.
 - 시트에서 `memo` 열은 직접 적어도 덮어쓰지 않습니다 (매매 이유 기록용).
 

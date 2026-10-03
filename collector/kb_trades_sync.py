@@ -30,66 +30,50 @@ CONFIG = {
     "WORK_DIR": os.path.expanduser("~/card_sms"),   # 토큰 캐시·평단 기록 저장 (저장소 밖)
     "WEBAPP_URL": "",                                # Apps Script 웹앱 URL
     "WRITE_TOKEN": "",
-    "KB_APP_KEY": "",
-    "KB_APP_SECRET": "",
-    "KB_ACCOUNT": "",                                # 계좌번호 (하이픈 없이)
-    "KB_ACCOUNT_PRODUCT": "01",                      # 계좌 상품코드 ★ 문서 확인
-    "SELL_TAX_RATE": 0.0020,                         # 매도 제세금률 — API가 세금을 주면 그 값을 우선 사용. 현행 세율 확인 필요
-    "FEE_RATE": 0.00015,                             # 수수료율 — API가 수수료를 주면 그 값을 우선 사용
+    "KB_APP_KEY": "",                                # 비워 두면 KB_ENV_FILE(.env)의 KB_OPENAPI_APP_KEY 사용
+    "KB_APP_SECRET": "",                             # 비워 두면 KB_ENV_FILE(.env)의 KB_OPENAPI_APP_SECRET 사용
+    "KB_ENV_FILE": "~/kb_swing_gpt/kb_swing/.env",   # 기존 kb_swing 의 키를 그대로 재사용
+    "KB_IP_ADDR": "",                                # 비우면 자동 (KB는 요청 헤더에 IP·MAC 필수)
+    "KB_MAC_ADDR": "",
+    "SELL_TAX_RATE": 0.0020,                         # 매도 제세금률(추정용) — 현행 세율 확인 필요
+    "FEE_RATE": 0.00015,                             # 수수료율(추정용)
 }
 
 # ---------------------------------------------------------------------
-# KB증권 API 매핑 — ★ 표시는 KB 개발가이드(API 문서 엑셀/JSON) 값으로 교체하세요.
-#   1) --raw 로 실제 응답을 본 뒤  2) *_FIELDS 의 오른쪽 값을 실제 필드명으로 바꾸면 됩니다.
-#   후보를 여러 개 적어두면 응답에 있는 첫 필드를 씁니다.
+# KB증권 Open API (B2C) — 공식 예제 저장소(kbsecurities/kb-openapi) 형식
+#   요청:  POST {BASE}/api/v1/{tr소문자}   {dataHeader:{ipAddr,macAddr}, dataBody:{...}}
+#   응답:  {dataHeader:{processFlag:'A'|'B', processCode, processMessage}, dataBody:{...}}
+#   SSQM2341 계좌별주문체결조회(하루 단위) · SSQM2952 계좌자산평가(매입평균가)
 # ---------------------------------------------------------------------
 KB_API = {
-    "BASE_URL": "https://openapi.kbsec.com",                       # ★
-    "TOKEN_PATH": "/oauth2/token",                                 # ★
-    "TOKEN_BODY": {"grant_type": "client_credentials",             # ★ 키 이름 (appkey/appsecret 등)
-                   "appkey": "{KB_APP_KEY}", "appsecret": "{KB_APP_SECRET}"},
-    "HEADERS": {"appkey": "{KB_APP_KEY}", "appsecret": "{KB_APP_SECRET}"},  # ★ 공통 헤더
-    "TR_HEADER": "tr_id",                                          # ★ 거래ID 헤더 이름
-
-    # 주문체결 내역 조회 (국내주식)
-    "EXEC_PATH": "/domestic-stock/v1/trading/inquire-daily-ccld",   # ★
-    "EXEC_TR": "KB_EXEC_TR_ID",                                    # ★
-    "EXEC_PARAMS": {                                               # ★ {from} {to} {acct} {prod} {ctx} 치환
-        "CANO": "{acct}", "ACNT_PRDT_CD": "{prod}",
-        "INQR_STRT_DT": "{from}", "INQR_END_DT": "{to}",
-        "CCLD_DVSN": "01",                                         # 체결분만
-        "CTX_AREA_FK100": "", "CTX_AREA_NK100": "{ctx}",
-    },
-    "EXEC_LIST_KEYS": ["output1", "output", "list", "data"],       # 체결 목록이 들어 있는 키 후보
-    "NEXT_KEY_FIELD": "ctx_area_nk100",                            # 연속조회 키 (없으면 1페이지만)
+    "BASE_URL": "https://developer.kbsec.com:32484",
+    "TOKEN_PATH": "/oauth2/token",
+    "EXEC_TR": "SSQM2341",
+    "EXEC_INPUTS": ("inq_clsf", "ccls_clsf", "ordr_dt", "is_cd", "ordr_no", "mthr_ordr_no", "orgn_ordr_no",
+                    "s_ccls_amt", "b_ccls_amt", "s_ccls_q", "b_ccls_q", "ac_nm", "is_nm", "cn_clsf", "nxt_key"),
+    "BAL_TR": "SSQM2952",
+    "EMPTY_CODES": ("1861", "2149"),      # 조회할 자료가 없습니다
+    "HOLIDAY_CODES": ("2854",),           # 주문일자가 현재일자보다 큽니다(주말·휴장일)
     "EXEC_FIELDS": {
-        "date": ["ord_dt", "ccld_dt", "trd_dt"],                   # YYYYMMDD
-        "time": ["ccld_tmd", "ord_tmd", "ccld_time"],              # HHMMSS
-        "ticker": ["pdno", "isu_cd", "stk_cd"],
-        "name": ["prdt_name", "isu_nm", "stk_nm"],
-        "side": ["sll_buy_dvsn_cd_name", "sll_buy_dvsn_cd", "trd_tp"],  # 01/매도, 02/매수 등
-        "qty": ["tot_ccld_qty", "ccld_qty"],
-        "price": ["avg_prvs", "ccld_unpr", "ccld_pric"],
-        "fee": ["fee", "cmsn"],
-        "tax": ["tax", "tlex"],
-        "order_no": ["odno", "ord_no"],
-        "exec_no": ["ccld_no", "exec_no"],
-        "pnl": ["rlzt_pfls", "realized_pnl"],                      # API가 실현손익을 주면 그대로 사용
+        "time": ["ccls_ntc_tm", "ordr_tm"],
+        "ticker": ["stnd_is_no", "is_cd", "shrt_cd"],
+        "name": ["is_nm", "hngl_is_nm"],
+        "side": ["trd_dl_ccd_nm", "dl_clsf_nm"],
+        "side_code": ["trd_clsf"],          # '1' 매도
+        "qty": ["tl_ccls_q", "ccls_q"],
+        "price": ["ccls_uprc", "ccls_prc"],
+        "amount": ["ccls_amt"],
+        "order_no": ["ordr_no", "odno"],
+        "amended": ["crct_cncl_ccd"],
     },
-    "SELL_CODES": ["01", "매도", "SELL", "S"],                      # side 값 중 매도 의미
-
-    # 잔고 조회 (평균단가 기준점)
-    "BAL_PATH": "/domestic-stock/v1/trading/inquire-balance",      # ★
-    "BAL_TR": "KB_BALANCE_TR_ID",                                  # ★
-    "BAL_PARAMS": {"CANO": "{acct}", "ACNT_PRDT_CD": "{prod}"},    # ★
-    "BAL_LIST_KEYS": ["output1", "output", "list", "data"],
     "BAL_FIELDS": {
-        "ticker": ["pdno", "isu_cd", "stk_cd"],
-        "name": ["prdt_name", "isu_nm", "stk_nm"],
-        "qty": ["hldg_qty", "bal_qty", "qty"],
-        "avg": ["pchs_avg_pric", "avg_prc", "avg_unpr"],
+        "ticker": ["is_cd", "shrt_cd", "is_no", "stnd_is_cd"],
+        "name": ["is_nm"],
+        "qty": ["ec_q"],                  # 실보유수량 (오늘 판 종목은 0)
+        "avg": ["byng_avr_prc"],          # 매입평균가
     },
-    "SLEEP_SEC": 0.3,
+    "SLEEP_SEC": 0.6,
+    "MAX_PAGES": 30,
 }
 
 # HTS/MTS 체결내역 CSV 컬럼 매핑 (후보 중 있는 첫 컬럼 사용) — 파일 머리글에 맞게 추가하세요
@@ -113,6 +97,15 @@ if os.path.exists(_local):
     with open(_local, encoding="utf-8") as _f:
         CONFIG.update({k: os.path.expanduser(v) if isinstance(v, str) and v.startswith("~") else v
                        for k, v in json.load(_f).items() if k in CONFIG})
+_env = os.path.expanduser(CONFIG["KB_ENV_FILE"] or "")
+if (not CONFIG["KB_APP_KEY"] or not CONFIG["KB_APP_SECRET"]) and _env and os.path.exists(_env):
+    for _line in open(_env, encoding="utf-8"):
+        _k, _, _v = _line.strip().partition("=")
+        _v = _v.strip().strip('"').strip("'")
+        if _k == "KB_OPENAPI_APP_KEY" and not CONFIG["KB_APP_KEY"]:
+            CONFIG["KB_APP_KEY"] = _v
+        elif _k == "KB_OPENAPI_APP_SECRET" and not CONFIG["KB_APP_SECRET"]:
+            CONFIG["KB_APP_SECRET"] = _v
 
 
 # ------------------------------------------------------------- utils
@@ -146,8 +139,23 @@ def norm_time(v):
 
 
 def is_sell(side):
-    s = str(side).strip().upper()
-    return any(s == c.upper() or c in str(side) for c in KB_API["SELL_CODES"]) and "매수" not in str(side)
+    """'매도' 문구 우선(공매도·신용매도 포함), 영문 sell, 또는 KB 매매구분 코드 '1'."""
+    t = str(side).strip()
+    if "매도" in t:
+        return True
+    if "매수" in t:
+        return False
+    return t.upper() in ("1", "SELL", "S")
+
+
+def norm_code(v):
+    """A005930 / KR7005930003 → 005930"""
+    t = str(v).strip()
+    if len(t) == 12 and t.startswith("KR7"):
+        return t[3:9]
+    if len(t) == 7 and t[0] == "A":
+        return t[1:]
+    return t
 
 
 def fill(template, **kw):
@@ -178,93 +186,175 @@ def jsave(name, obj):
 
 
 # ------------------------------------------------------------- KB API
-def http_json(method, url, headers=None, body=None):
-    data = json.dumps(body).encode("utf-8") if body is not None else None
-    h = {"Content-Type": "application/json; charset=UTF-8", **(headers or {})}
-    req = urllib.request.Request(url, data=data, headers=h, method=method)
+class KBError(RuntimeError):
+    pass
+
+
+def host_addr():
+    import socket, uuid
+    ip = CONFIG["KB_IP_ADDR"]
+    if not ip:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as so:
+                so.connect(("8.8.8.8", 80))
+                ip = so.getsockname()[0]
+        except OSError:
+            ip = "127.0.0.1"
+    mac = CONFIG["KB_MAC_ADDR"]
+    if not mac:
+        h = f"{uuid.getnode():012X}"
+        mac = ":".join(h[i:i + 2] for i in range(0, 12, 2))
+    return {"ipAddr": ip, "macAddr": mac}
+
+
+_last_call = [0.0]
+
+
+def kb_post(path, body, headers):
+    time.sleep(max(0.0, KB_API["SLEEP_SEC"] - (time.monotonic() - _last_call[0])))
+    _last_call[0] = time.monotonic()
+    req = urllib.request.Request(KB_API["BASE_URL"] + path, data=json.dumps(body).encode("utf-8"),
+                                 headers={"Content-Type": "application/json", **headers}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read().decode("utf-8")), dict(r.headers)
+            status, text = r.status, r.read().decode("utf-8", "ignore")
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"HTTP {e.code} {url}\n{e.read().decode('utf-8', 'ignore')[:500]}")
+        status, text = e.code, e.read().decode("utf-8", "ignore")
+    except urllib.error.URLError as e:
+        raise KBError(f"KB 서버에 연결하지 못했습니다: {e.reason}")
+    try:
+        data = json.loads(text)
+    except ValueError:
+        raise KBError(f"KB 응답이 JSON이 아닙니다 (HTTP {status})")
+    head = data.get("dataHeader") if isinstance(data, dict) else None
+    head = head if isinstance(head, dict) else {}
+    return status, head, (data.get("dataBody", data) if isinstance(data, dict) else {})
 
 
-def kb_token():
+def kb_token(force=False):
     cache = jload("kb_token.json", {})
-    if cache.get("token") and cache.get("exp", 0) > time.time() + 600:
+    if not force and cache.get("token") and cache.get("exp", 0) > time.time() + 60:
         return cache["token"]
-    if not CONFIG["KB_APP_KEY"]:
-        sys.exit("config.local.json 에 KB_APP_KEY / KB_APP_SECRET / KB_ACCOUNT 를 입력하세요.")
-    body = fill(KB_API["TOKEN_BODY"], KB_APP_KEY=CONFIG["KB_APP_KEY"], KB_APP_SECRET=CONFIG["KB_APP_SECRET"])
-    res, _ = http_json("POST", KB_API["BASE_URL"] + KB_API["TOKEN_PATH"], body=body)
-    tok = res.get("access_token")
-    if not tok:
-        raise RuntimeError(f"토큰 발급 실패: {res}")
-    ttl = int(to_num(res.get("expires_in")) or 86400)
-    jsave("kb_token.json", {"token": tok, "exp": time.time() + ttl})
-    return tok
+    if not CONFIG["KB_APP_KEY"] or not CONFIG["KB_APP_SECRET"]:
+        sys.exit("KB 앱키를 찾지 못했습니다. config.local.json 의 KB_APP_KEY/KB_APP_SECRET 또는 "
+                 f"{CONFIG['KB_ENV_FILE']} 를 확인하세요.")
+    key, sec = CONFIG["KB_APP_KEY"], CONFIG["KB_APP_SECRET"]
+    errors = []
+    for body in ({"dataHeader": host_addr(), "dataBody": {"appKey": key, "appSecret": sec, "grantType": "client_credentials"}},
+                 {"grant_type": "client_credentials", "appKey": key, "appSecret": sec}):
+        status, head, b = kb_post(KB_API["TOKEN_PATH"], body, {})
+        tok = b.get("access_token") or b.get("accessToken")
+        if tok:
+            ttl = to_num(b.get("expires_in") or b.get("expiresIn")) or 300
+            jsave("kb_token.json", {"token": tok, "exp": time.time() + ttl - 60})
+            return tok
+        errors.append(f"HTTP {status} {head.get('processCode', '')} {head.get('processMessage', '')}".strip())
+    raise KBError("토큰 발급 실패: " + " / ".join(errors))
 
 
-def kb_get(path, tr, params):
-    headers = fill(KB_API["HEADERS"], KB_APP_KEY=CONFIG["KB_APP_KEY"], KB_APP_SECRET=CONFIG["KB_APP_SECRET"])
-    headers["Authorization"] = "Bearer " + kb_token()
-    headers[KB_API["TR_HEADER"]] = tr
-    url = KB_API["BASE_URL"] + path + "?" + urllib.parse.urlencode(params)
-    time.sleep(KB_API["SLEEP_SEC"])
-    return http_json("GET", url, headers)
+def kb_call(tr, body):
+    """TR 호출 → (rows, dataBody). 빈 결과·휴장일은 빈 목록."""
+    for attempt in range(2):
+        status, head, b = kb_post("/api/v1/" + tr.lower(), {"dataHeader": host_addr(), "dataBody": body},
+                                  {"appKey": CONFIG["KB_APP_KEY"], "Authorization": "Bearer " + kb_token(force=attempt > 0)})
+        code = str(head.get("processCode", "")).strip()
+        if (status == 401 or code == "I445") and attempt == 0:
+            continue                                        # 토큰 만료 → 재발급 후 1회 재시도
+        flag = str(head.get("processFlag", "A")).strip().upper() or "A"
+        if code in KB_API["EMPTY_CODES"] or code in KB_API["HOLIDAY_CODES"]:
+            return [], b
+        if status != 200 and not head:
+            raise KBError(f"{tr} HTTP {status}")
+        if flag != "A":
+            raise KBError(f"{tr} 업무 오류: {code} {head.get('processMessage', '')}".strip())
+        rows = next((v for v in b.values() if isinstance(v, list)), []) if isinstance(b, dict) else []
+        return rows, b
+    raise KBError("토큰을 갱신하지 못했습니다.")
 
 
-def list_from(res, keys):
-    for k in keys:
-        v = res.get(k)
-        if isinstance(v, list):
-            return v
-    return []
+def weekdays(d_from, d_to):
+    d0, d1 = dt.date.fromisoformat(d_from), dt.date.fromisoformat(d_to)
+    out = []
+    while d0 <= d1:
+        if d0.weekday() < 5:
+            out.append(d0.isoformat())
+        d0 += dt.timedelta(days=1)
+    return out
+
+
+def fetch_day_rows(day):
+    """SSQM2341 하루치 체결 행 전부 (연속조회 포함)."""
+    base = {k: "" for k in KB_API["EXEC_INPUTS"]}
+    base.update({"inq_clsf": "1", "ccls_clsf": "1", "ordr_dt": day.replace("-", ""), "cn_clsf": "0"})
+    rows, nxt, prev = [], "", None
+    for _ in range(KB_API["MAX_PAGES"]):
+        body = dict(base, nxt_key=nxt, cn_clsf="1" if nxt else "0")
+        page, b = kb_call(KB_API["EXEC_TR"], body)
+        rows += page
+        prev, nxt = nxt, str((b or {}).get("nxt_key", "")).strip()
+        if not nxt or nxt == prev:
+            break
+    return rows
 
 
 def fetch_executions(d_from, d_to):
-    out, ctx = [], ""
-    for _ in range(20):                                   # 연속조회 최대 20페이지
-        params = fill(KB_API["EXEC_PARAMS"], acct=CONFIG["KB_ACCOUNT"], prod=CONFIG["KB_ACCOUNT_PRODUCT"],
-                      **{"from": d_from.replace("-", ""), "to": d_to.replace("-", ""), "ctx": ctx})
-        res, hdr = kb_get(KB_API["EXEC_PATH"], KB_API["EXEC_TR"], params)
-        rows = list_from(res, KB_API["EXEC_LIST_KEYS"])
-        out += [normalize(r, KB_API["EXEC_FIELDS"]) for r in rows]
-        ctx = str(res.get(KB_API["NEXT_KEY_FIELD"], "")).strip()
-        if not ctx or not rows or hdr.get("tr_cont", "") not in ("F", "M"):
-            break
-    return [e for e in out if e["qty"] > 0]
+    """기간 체결 → 체결 1건 = 1행. 분할체결 연속 행(주문번호 0)은 앞 주문에 귀속."""
+    F = KB_API["EXEC_FIELDS"]
+    out = []
+    for day in weekdays(d_from, d_to):
+        header, seq = None, {}
+        for r in fetch_day_rows(day):
+            ono = str(pick(r, F["order_no"])).strip()
+            cont = ono != "" and set(ono) == {"0"}
+            if not cont:
+                header = r
+            elif header is None:
+                continue                                      # 귀속할 주문이 없는 연속 행
+            src = header
+            ono = str(pick(src, F["order_no"])).strip()
+            qty = to_num(pick(r, F["qty"]))
+            price = to_num(pick(r, F["price"]))
+            if qty <= 0 or price <= 0:
+                continue
+            side_name = pick(src, F["side"]) or pick(src, F["side_code"])
+            seq[ono] = seq.get(ono, 0) + 1
+            out.append({
+                "date": day, "time": norm_time(pick(r, F["time"]) or pick(src, F["time"])),
+                "ticker": norm_code(pick(src, F["ticker"])), "name": str(pick(src, F["name"])).strip(),
+                "side": "매도" if is_sell(side_name) else "매수", "qty": qty, "price": price,
+                "fee": None, "tax": None, "order_no": ono, "exec_no": str(seq[ono]), "api_pnl": None,
+            })
+    return out
 
 
 def fetch_balance():
-    params = fill(KB_API["BAL_PARAMS"], acct=CONFIG["KB_ACCOUNT"], prod=CONFIG["KB_ACCOUNT_PRODUCT"])
-    res, _ = kb_get(KB_API["BAL_PATH"], KB_API["BAL_TR"], params)
-    pos = {}
-    for r in list_from(res, KB_API["BAL_LIST_KEYS"]):
-        f = KB_API["BAL_FIELDS"]
-        t = str(pick(r, f["ticker"])).strip()
-        q = to_num(pick(r, f["qty"]))
-        if t and q > 0:
-            pos[t] = {"qty": q, "avg": to_num(pick(r, f["avg"])), "name": pick(r, f["name"])}
+    rows, _ = kb_call(KB_API["BAL_TR"], {"excg_mktpr_ccd": "A"})
+    F, pos = KB_API["BAL_FIELDS"], {}
+    for r in rows:
+        t = norm_code(pick(r, F["ticker"]))
+        if not t or not t[:6].isdigit():
+            continue                                          # 국내 종목만
+        q, avg = to_num(pick(r, F["qty"])), to_num(pick(r, F["avg"]))
+        if q > 0 or avg > 0:
+            pos[t] = {"qty": q, "avg": avg, "name": str(pick(r, F["name"])).strip()}
     return pos
 
 
 def normalize(r, F):
-    side_raw = pick(r, F["side"])
-    pnl_raw = pick(r, F.get("pnl", []), None)
+    """CSV 행 정규화 (HTS/MTS 체결내역 가져오기용)."""
     return {
         "date": norm_date(pick(r, F["date"])),
         "time": norm_time(pick(r, F["time"])),
-        "ticker": str(pick(r, F["ticker"])).strip().lstrip("A"),
+        "ticker": norm_code(pick(r, F["ticker"])),
         "name": str(pick(r, F["name"])).strip(),
-        "side": "매도" if is_sell(side_raw) else "매수",
+        "side": "매도" if is_sell(pick(r, F["side"])) else "매수",
         "qty": to_num(pick(r, F["qty"])),
         "price": to_num(pick(r, F["price"])),
         "fee": pick(r, F["fee"], None),
         "tax": pick(r, F["tax"], None),
         "order_no": str(pick(r, F["order_no"])).strip(),
         "exec_no": str(pick(r, F["exec_no"])).strip(),
-        "api_pnl": None if pnl_raw in (None, "") else to_num(pnl_raw),
+        "api_pnl": None,
     }
 
 
@@ -369,7 +459,7 @@ def sync(d_from, d_to):
         if t not in bal and p.get("name"):
             bal[t] = {"qty": 0, "avg": 0, "name": p["name"]}
     seen |= {r["id"] for r in rows}
-    jsave("kb_state.json", {"positions": bal, "seen": sorted(seen)[-3000:],
+    jsave("kb_state.json", {"positions": bal, "seen": sorted(seen)[-3000:], "last_day": d_to,
                             "updated": dt.datetime.now().isoformat(timespec="seconds")})
     print(f"신규 체결 {len(rows)}건 처리, 보유 {sum(1 for v in bal.values() if v['qty'] > 0)}종목 기준점 갱신")
 
@@ -390,16 +480,16 @@ def rewind(bal, execs):
 
 
 def raw_dump(d_from, d_to):
-    params = fill(KB_API["EXEC_PARAMS"], acct=CONFIG["KB_ACCOUNT"], prod=CONFIG["KB_ACCOUNT_PRODUCT"],
-                  **{"from": d_from.replace("-", ""), "to": d_to.replace("-", ""), "ctx": ""})
-    print("===== 체결내역 응답 =====")
-    res, hdr = kb_get(KB_API["EXEC_PATH"], KB_API["EXEC_TR"], params)
-    print(json.dumps(res, ensure_ascii=False, indent=1)[:6000])
-    print("===== 응답 헤더 =====\n", {k: v for k, v in hdr.items() if k.lower().startswith(("tr", "gt"))})
-    print("===== 잔고 응답 =====")
-    res, _ = kb_get(KB_API["BAL_PATH"], KB_API["BAL_TR"],
-                    fill(KB_API["BAL_PARAMS"], acct=CONFIG["KB_ACCOUNT"], prod=CONFIG["KB_ACCOUNT_PRODUCT"]))
-    print(json.dumps(res, ensure_ascii=False, indent=1)[:6000])
+    """응답 구조 확인용. 금액·수량은 그대로, 키/토큰은 출력하지 않음."""
+    for day in weekdays(d_from, d_to)[-3:]:
+        rows = fetch_day_rows(day)
+        print(f"===== {day} 체결 {len(rows)}행 =====")
+        for r in rows[:5]:
+            print(json.dumps(r, ensure_ascii=False))
+    rows, _ = kb_call(KB_API["BAL_TR"], {"excg_mktpr_ccd": "A"})
+    print(f"===== 계좌자산평가 {len(rows)}행 (필드명만) =====")
+    if rows:
+        print(sorted(rows[0].keys()))
 
 
 def import_csv(path, dry):
@@ -459,7 +549,7 @@ def self_test():
 if __name__ == "__main__":
     today = dt.date.today().isoformat()
     ap = argparse.ArgumentParser(description="KB증권 체결 → Trades 시트 동기화 (OSJ)")
-    ap.add_argument("--from", dest="d_from", default=today, help="시작일 YYYY-MM-DD (기본: 오늘)")
+    ap.add_argument("--from", dest="d_from", default=None, help="시작일 YYYY-MM-DD (기본: 마지막 동기화일, 첫 실행은 오늘)")
     ap.add_argument("--to", dest="d_to", default=today, help="종료일 YYYY-MM-DD (기본: 오늘)")
     ap.add_argument("--raw", action="store_true", help="API 응답 원문 출력 (매핑 확인용)")
     ap.add_argument("--import-csv", metavar="FILE", help="HTS/MTS 체결내역 CSV 가져오기")
@@ -475,4 +565,6 @@ if __name__ == "__main__":
     else:
         if a.dry:
             CONFIG["WEBAPP_URL"] = ""
-        sync(a.d_from, a.d_to)
+        st = jload("kb_state.json", None)
+        d_from = a.d_from or (st.get("last_day") if st and st.get("last_day") else today)
+        sync(d_from, a.d_to)

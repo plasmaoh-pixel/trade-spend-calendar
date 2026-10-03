@@ -1,0 +1,17 @@
+# 비밀값 — 절대 커밋 금지
+collector/config.local.json
+collector/config.local.json.*
+.clasp.json
+.clasprc.json
+
+# 수집된 개인 데이터 / 로그
+*.csv
+state.json
+*.log
+*.err
+kb_token.json
+kb_state*.json
+
+# 기타
+__pycache__/
+.DS_Store

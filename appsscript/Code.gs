@@ -1,8 +1,8 @@
 /**
- * 매매·지출 달력 API (Google Apps Script 웹앱)  —  Copyright (c) OSJ
+ * 카드 지출 달력 API (Google Apps Script 웹앱)  —  Copyright (c) OSJ
  *
- *  GET  ?token=READ_TOKEN&from=YYYY-MM-DD&to=YYYY-MM-DD  → { ok, spend:[...], trades:[...] }
- *  POST { token: WRITE_TOKEN, kind: 'spend' | 'trades', op: 'add' (기본), rows: [...] }        → { ok, added }
+ *  GET  ?token=READ_TOKEN&from=YYYY-MM-DD&to=YYYY-MM-DD  → { ok, spend:[...] }
+ *  POST { token: WRITE_TOKEN, kind: 'spend', op: 'add' (기본), rows: [...] }                    → { ok, added }
  *  POST { token: WRITE_TOKEN, kind, op: 'update', id, fields: { memo, category, ... } }      → { ok, updated }
  *  POST { token: WRITE_TOKEN, kind, op: 'delete', id }                                       → { ok, deleted }
  *
@@ -19,13 +19,6 @@ const SHEETS = {
     // 수기 입력(id가 m- 로 시작)은 전부 수정 가능, 카드 문자 자동 입력은 아래 AUTO_EDITABLE만
     editable: ['date', 'datetime', 'card', 'amount', 'installment', 'merchant', 'category', 'memo'],
     autoEditable: ['category', 'memo'],
-  },
-  trades: {
-    name: 'Trades',
-    headers: ['id', 'date', 'time', 'ticker', 'name', 'side', 'qty', 'price',
-      'fee', 'pnl', 'memo'],
-    editable: ['date', 'time', 'ticker', 'name', 'side', 'qty', 'price', 'fee', 'pnl', 'memo'],
-    autoEditable: ['memo'],
   },
 };
 const PROPS = PropertiesService.getScriptProperties();
@@ -55,7 +48,6 @@ function doGet(e) {
   return out_({
     ok: true,
     spend: read_('spend', from, to),
-    trades: read_('trades', from, to),
   });
 }
 

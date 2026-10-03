@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#111113" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="매매지출">
+<meta name="apple-mobile-web-app-title" content="카드지출">
 <meta name="robots" content="noindex">
-<title>매매 · 지출 달력</title>
+<title>카드 지출 달력</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="config.js"></script>
 <style>
@@ -184,7 +184,7 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
 <!-- 로그인 -->
 <section id="login" class="hidden">
   <form class="login-card" id="loginForm" autocomplete="off">
-    <h1 id="appTitle">매매 · 지출 달력</h1>
+    <h1 id="appTitle">카드 지출 달력</h1>
     <p>보기용 토큰(READ_TOKEN)을 입력하세요.</p>
     <label class="field hidden" id="apiField"><span>API URL (Apps Script …/exec)</span>
       <input id="apiInput" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec"></label>
@@ -218,20 +218,14 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
     <div class="summary" id="summary"></div>
     <div class="controls">
       <div class="chips" id="cards"></div>
-      <div class="seg" id="mode">
-        <button data-m="all" class="on">전체</button>
-        <button data-m="trade">매매</button>
-        <button data-m="spend">지출</button>
-      </div>
     </div>
     <div class="cal" id="cal">
       <div class="dow" id="dow"></div>
       <div class="grid" id="grid"></div>
     </div>
-    <div class="legend"><span><i style="background:var(--up)"></i>매수 · 이익</span><span><i style="background:var(--down)"></i>매도 · 손실</span><span><i style="background:var(--spend)"></i>카드 지출</span><span>칸을 누르면 상세 · 좌우로 밀면 달 이동</span></div>
+    <div class="legend"><span>칸을 누르면 상세 · 좌우로 밀면 달 이동</span></div>
     <div class="narrow">
       <div class="panel" id="detail"></div>
-      <div class="panel" id="stocks"></div>
       <div class="panel" id="cats"></div>
     </div>
     <footer>© OSJ · 데이터는 Google 시트에만 저장됩니다</footer>
@@ -276,7 +270,7 @@ const S = {
   token: store.get('tsc_token') || '',
   wtoken: store.get('tsc_wtoken') || '',
   y: 0, m: 0, sel: null, card: '전체', mode: 'all',
-  cache: {}, data: { spend: [], trades: [] },
+  cache: {}, data: { spend: [] },
 };
 
 // ------------------------------------------------------------- utils
@@ -293,7 +287,6 @@ function compact(n) {
 const won = n => Math.round(n).toLocaleString('ko-KR') + '원';
 const signed = (n, f = compact) => (n > 0 ? '+' : n < 0 ? '−' : '') + f(Math.abs(n));
 const cls = n => n > 0 ? 'up' : n < 0 ? 'down' : 'muted';
-const isSell = t => String(t.side).includes('매도') || /sell/i.test(String(t.side));
 const toast = on => $('loading').classList.toggle('on', on);
 
 // ------------------------------------------------------------- data
@@ -322,10 +315,10 @@ async function load(force) {
         throw new Error(d.error || '응답 오류');
       }
     }
-    S.data = S.cache[key] = { spend: d.spend || [], trades: d.trades || [] };
+    S.data = S.cache[key] = { spend: d.spend || [] };
     render();
   } catch (e) {
-    S.data = { spend: [], trades: [] };
+    S.data = { spend: [] };
     render();
     $('detail').innerHTML = `<h3>불러오기 실패</h3><p class="empty">${esc(e.message)} — API URL과 네트워크를 확인하세요.</p>`;
   } finally { toast(false); }
@@ -333,13 +326,7 @@ async function load(force) {
 
 function aggregate() {
   const days = {};
-  const get = d => days[d] || (days[d] = { pnl: 0, buys: 0, sells: 0, trades: [], spend: 0, spends: [], fx: [] });
-  for (const t of S.data.trades) {
-    const g = get(String(t.date).slice(0, 10));
-    g.trades.push(t);
-    g.pnl += num(t.pnl);
-    isSell(t) ? g.sells++ : g.buys++;
-  }
+  const get = d => days[d] || (days[d] = { spend: 0, spends: [], fx: [] });
   for (const s of S.data.spend) {
     if (S.card !== '전체' && s.card !== S.card) continue;
     const g = get(String(s.date || s.datetime).slice(0, 10));
@@ -359,75 +346,56 @@ function render() {
   const mm = `${S.y}-${pad(S.m + 1)}`;
 
   // month totals
-  let pnl = 0, spend = 0, win = 0, tdays = 0;
+  let spend = 0, cnt = 0;
   const cats = {};
   for (const [d, g] of Object.entries(days)) {
     if (!d.startsWith(mm)) continue;
-    pnl += g.pnl; spend += g.spend;
-    if (g.sells) { tdays++; if (g.pnl > 0) win++; }
+    spend += g.spend; cnt += g.spends.length;
     for (const s of g.spends) if (s.amount !== '') cats[s.category || '기타'] = (cats[s.category || '기타'] || 0) + num(s.amount);
   }
-  const net = pnl - spend;
+  const now = new Date(), isCur = now.getFullYear() === S.y && now.getMonth() === S.m;
+  const elapsed = isCur ? now.getDate() : new Date(S.y, S.m + 1, 0).getDate();
+  const isPast = new Date(S.y, S.m, 1) <= now;
+  const topCat = Object.entries(cats).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
   $('summary').innerHTML = [
-    ['실현손익', `<span class="${cls(pnl)}">${signed(pnl)}</span>`],
-    ['카드지출', `<span>${compact(spend)}</span>`],
-    ['순액', `<span class="${cls(net)}">${signed(net)}</span>`],
-    ['승률', tdays ? `${Math.round(win / tdays * 100)}% <small class="muted" style="font-size:12px;font-weight:500">${win}/${tdays}일</small>` : '<span class="muted">—</span>'],
+    ['이번 달 지출', `<span>${compact(spend)}</span>`],
+    ['결제 건수', `<span>${cnt}건</span>`],
+    ['하루 평균', isPast ? `<span>${compact(spend / elapsed)}</span>` : '<span class="muted">—</span>'],
+    ['최다 분류', topCat ? `<span>${esc(topCat[0])}</span>` : '<span class="muted">—</span>'],
   ].map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v num">${v}</div></div>`).join('');
 
   // grid (월간 플래너)
   const wide = innerWidth >= 700;
   $('cal').classList.toggle('wide', wide);
   $('dow').innerHTML = '일월화수목금토'.split('').map(x => `<div>${x}</div>`).join('') + (wide ? '<div>주간</div>' : '');
-  const lim = wide ? { tr: 4, sp: 4, name: 9 } : { tr: 3, sp: 3, name: innerWidth < 420 ? 3 : 4 };
-  const showTr = S.mode !== 'spend', showSp = S.mode !== 'trade';
+  const lim = wide ? { sp: 5, name: 9 } : { sp: 3, name: 4 };
   let html = '';
   for (let wi = 0; wi < 6; wi++) {
     const w0 = new Date(start.getFullYear(), start.getMonth(), start.getDate() + wi * 7);
     if (wi > 0 && w0.getMonth() !== S.m) break;
-    let wp = 0, ws = 0, f = null, t = null;
+    let ws = 0, wc = 0, f = null, t = null;
     for (let di = 0; di < 7; di++) {
       const dt = new Date(w0.getFullYear(), w0.getMonth(), w0.getDate() + di);
       const d = ymd(dt), g = days[d], out = dt.getMonth() !== S.m;
-      if (!out) { f = f || dt; t = dt; if (g) { wp += g.pnl; ws += g.spend; } }
+      if (!out) { f = f || dt; t = dt; if (g) { ws += g.spend; wc += g.spends.length; } }
       const c = ['cell', 'c' + di, out && 'out', di === 0 && 'sun', di === 6 && 'sat', d === today && 'today', d === S.sel && 'sel'].filter(Boolean).join(' ');
       let body = '';
-      if (g && showTr && g.trades.length) {
-        const m = new Map();
-        for (const x of g.trades) {
-          const sell = isSell(x), k = (sell ? 'S' : 'B') + (x.ticker || x.name);
-          const o = m.get(k) || { sell, name: x.name || x.ticker, pnl: 0, has: false };
-          if (sell && x.pnl !== '' && x.pnl != null) { o.pnl += num(x.pnl); o.has = true; }
-          m.set(k, o);
-        }
-        const items = [...m.values()].sort((a, b) => (b.sell - a.sell) || Math.abs(b.pnl) - Math.abs(a.pnl));
-        body += items.slice(0, lim.tr).map(o => {
-          const nm = wide ? o.name : String(o.name).slice(0, lim.name);
-          const right = wide ? (o.sell ? (o.has ? `<span class="a num ${cls(o.pnl)}">${signed(o.pnl)}</span>` : '<span class="side">매도</span>') : '<span class="side">매수</span>') : '';
-          return `<div class="it tr ${o.sell ? 'sell' : 'buy'}"><span class="n">${esc(nm)}</span>${right}</div>`;
-        }).join('') + (items.length > lim.tr ? `<div class="it more">+${items.length - lim.tr}종목</div>` : '');
-      }
-      if (g && showSp && g.spends.length) {
+      if (g && g.spends.length) {
         const sp = [...g.spends].sort((a, b) => num(b.amount) - num(a.amount));
-        if (wide || S.mode === 'spend') {
-          const n = S.mode === 'spend' ? lim.sp + 2 : lim.sp;
-          body += sp.slice(0, n).map(x => {
-            const fx = x.amount === '' && x.currency && x.currency !== 'KRW';
-            const nm = wide ? (x.merchant || '?') : String(x.merchant || '?').slice(0, lim.name);
-            const amt = fx ? esc(x.currency) : (num(x.amount) < 0 ? '−' : '') + compact(Math.abs(num(x.amount)));
-            return `<div class="it sp"><span class="n">${esc(nm)}</span>${wide ? `<span class="a num">${amt}</span>` : ''}</div>`;
-          }).join('') + (sp.length > n ? `<div class="it more">+${sp.length - n}건</div>` : '');
-        }
+        body = sp.slice(0, lim.sp).map(x => {
+          const fx = x.amount === '' && x.currency && x.currency !== 'KRW';
+          const nm = wide ? (x.merchant || '?') : String(x.merchant || '?').slice(0, lim.name);
+          const amt = fx ? esc(x.currency) : (num(x.amount) < 0 ? '−' : '') + compact(Math.abs(num(x.amount)));
+          return `<div class="it sp"><span class="n">${esc(nm)}</span>${wide ? `<span class="a num">${amt}</span>` : ''}</div>`;
+        }).join('') + (sp.length > lim.sp ? `<div class="it more">+${sp.length - lim.sp}건</div>` : '');
       }
-      const tot = g && showSp && (g.spend || g.fx.length) ? `<div class="tot num">${wide ? '지출 ' : ''}${g.spend ? compact(g.spend) : ''}${g.fx.length ? (g.spend ? '+' : '') + 'FX' : ''}</div>` : '';
-      const pn = g && showTr && g.pnl ? `<span class="pn num ${cls(g.pnl)}">${signed(g.pnl)}</span>` : '';
-      html += `<button class="${c}" data-d="${d}"><div class="hd"><span class="d">${dt.getDate()}</span>${wide ? pn : ''}</div>${!wide && pn ? `<div>${pn}</div>` : ''}${body}${tot}</button>`;
+      const tot = g && (g.spend || g.fx.length) ? `<div class="tot num">${g.spend ? compact(g.spend) : ''}${g.fx.length ? (g.spend ? '+' : '') + 'FX' : ''}</div>` : '';
+      html += `<button class="${c}" data-d="${d}"><div class="hd"><span class="d">${dt.getDate()}</span></div>${body}${tot}</button>`;
     }
-    const n = wp - ws;
     if (wide) {
-      html += `<div class="wkcell num"><div><div class="k">손익</div><b class="${cls(wp)}">${signed(wp)}</b></div><div><div class="k">지출</div><b>${compact(ws)}</b></div><div><div class="k">순액</div><b class="${cls(n)}">${signed(n)}</b></div></div>`;
+      html += `<div class="wkcell num"><div><div class="k">지출</div><b>${compact(ws)}</b></div><div><div class="k">건수</div><b>${wc}건</b></div></div>`;
     } else {
-      html += `<div class="wkrow num"><span>${f.getMonth() + 1}/${f.getDate()}–${t.getMonth() + 1}/${t.getDate()}</span><span>손익 <b class="${cls(wp)}">${signed(wp)}</b></span><span>지출 <b>${compact(ws)}</b></span><span>순 <b class="${cls(n)}">${signed(n)}</b></span></div>`;
+      html += `<div class="wkrow num"><span>${f.getMonth() + 1}/${f.getDate()}–${t.getMonth() + 1}/${t.getDate()}</span><span>지출 <b>${compact(ws)}</b></span><span><b>${wc}</b>건</span></div>`;
     }
   }
   $('grid').innerHTML = html;
@@ -442,54 +410,23 @@ function render() {
     ? `<div class="bars">${ce.map(([k, v]) => `<div class="b"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / cmax * 100).toFixed(1)}%"></div></div><span class="num">${compact(v)}</span></div>`).join('')}</div>`
     : '<p class="empty">이번 달 지출 내역이 없습니다.</p>');
 
-  renderStocks(mm);
   renderDetail(days);
-}
-
-function renderStocks(mm) {
-  const by = {};
-  for (const t of S.data.trades) {
-    if (!String(t.date).startsWith(mm)) continue;
-    const k = t.name || t.ticker;
-    const o = by[k] || (by[k] = { name: k, ticker: t.ticker, buy: 0, sell: 0, bq: 0, sq: 0, pnl: 0, last: '' });
-    if (isSell(t)) { o.sell++; o.sq += num(t.qty); o.pnl += num(t.pnl); } else { o.buy++; o.bq += num(t.qty); }
-    if (String(t.date) > o.last) o.last = String(t.date);
-  }
-  const list = Object.values(by).sort((a, b) => Math.abs(b.pnl) - Math.abs(a.pnl) || b.last.localeCompare(a.last));
-  const tot = list.reduce((a, o) => a + o.pnl, 0);
-  $('stocks').className = 'panel stk';
-  $('stocks').innerHTML = `<h3>종목별 매매 <small>${list.length}종목 · <span class="${cls(tot)}">${signed(tot)}</span></small></h3>` + (list.length
-    ? list.map(o => `<div class="row"><div class="a">
-        <div class="t">${esc(o.name)}${o.ticker && o.ticker !== o.name ? ` <span class="muted" style="font-weight:500;font-size:12.5px">${esc(o.ticker)}</span>` : ''}</div>
-        <div class="s num">${o.buy ? `<span class="up">▲매수 ${o.buy}회 ${o.bq.toLocaleString('ko-KR')}주</span>` : ''}${o.sell ? `<span class="down">▼매도 ${o.sell}회 ${o.sq.toLocaleString('ko-KR')}주</span>` : ''}<span>최근 ${o.last.slice(5).replace('-', '/')}</span></div>
-      </div><div class="v num ${cls(o.pnl)}">${o.sell ? signed(o.pnl, won) : '<span class="muted">보유</span>'}</div></div>`).join('')
-    : '<p class="empty">이번 달 매매 내역이 없습니다.</p>');
 }
 
 function renderDetail(days) {
   const d = S.sel;
   const el = $('detail');
   if (!d || !d.startsWith(`${S.y}-${pad(S.m + 1)}`)) {
-    el.innerHTML = `<h3>날짜를 눌러 상세 보기</h3><p class="empty">달력 칸에는 요약만, 여기에는 체결 시각·수량·메모와 결제 시각·카드·할부까지 모두 표시됩니다.</p>`;
+    el.innerHTML = `<h3>날짜를 눌러 상세 보기</h3><p class="empty">여기에 결제 시각·카드·할부·메모까지 모두 표시됩니다. 칸을 좌우로 밀면 달이 바뀝니다.</p>`;
     return;
   }
-  const g = days[d] || { pnl: 0, spend: 0, trades: [], spends: [], fx: [] };
+  const g = days[d] || { spend: 0, spends: [], fx: [] };
   const dt = new Date(d + 'T00:00:00');
   const wd = '일월화수목금토'[dt.getDay()];
-  const trades = [...g.trades].sort((a, b) => String(a.time).localeCompare(String(b.time)));
   const spends = [...g.spends].sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
   el.innerHTML = `
     <h3>${dt.getMonth() + 1}월 ${dt.getDate()}일 (${wd})</h3>
-    <div class="daytot num"><span>손익 <b class="${cls(g.pnl)}">${signed(g.pnl, won)}</b></span><span>지출 <b>${won(g.spend)}</b></span><span>순액 <b class="${cls(g.pnl - g.spend)}">${signed(g.pnl - g.spend, won)}</b></span></div>
-    <div class="sub">매매 ${trades.length}건</div>
-    ${trades.length ? trades.map(t => {
-      const sell = isSell(t);
-      const q = num(t.qty), p = num(t.price);
-      return `<div class="row"><div class="a">
-          <div class="t"><span class="tag ${sell ? 'sell' : 'buy'}">${sell ? '매도' : '매수'}</span>${esc(t.name || t.ticker)}</div>
-          <div class="s num">${esc(t.time || '')}${t.ticker && t.name ? ' · ' + esc(t.ticker) : ''}${q ? ` · ${q.toLocaleString('ko-KR')}주 × ${p.toLocaleString('ko-KR')}` : ''}${t.memo ? ' · ' + esc(t.memo) : ''}</div>
-        </div><div class="v num ${cls(num(t.pnl))}">${num(t.pnl) ? signed(num(t.pnl), won) : '<span class="muted">—</span>'}</div></div>`;
-    }).join('') : '<p class="empty">매매 없음</p>'}
+    <div class="daytot num"><span>지출 <b>${won(g.spend)}</b></span><span><b>${g.spends.length}</b>건</span></div>
     <div class="sub subrow"><span>지출 ${spends.length}건</span><button class="addlink" type="button" data-add="${d}">+ 추가</button></div>
     ${spends.length ? spends.map(s => {
       const fx = s.amount === '' && s.currency && s.currency !== 'KRW';
@@ -619,23 +556,14 @@ $('detail').addEventListener('click', e => {
 function demoData(start, end) {
   let seed = 7;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-  const stocks = [['005930', '삼성전자', 71000], ['000660', 'SK하이닉스', 185000], ['042700', '한미반도체', 98000], ['NVDA', '엔비디아', 182000], ['TSLA', '테슬라', 340000]];
-  const shops = [['스타벅스 고덕점', '카페', 6500], ['GS25 평택고덕점', '편의점', 4800], ['쿠팡', '온라인', 38000], ['이마트 평택점', '마트', 92000], ['카카오T 택시', '교통', 14200], ['배달의민족', '온라인', 26000], ['교보문고', '기타', 18000], ['메가커피', '카페', 3200]];
+  const shops = [['스타벅스', '카페', 6500], ['GS25', '편의점', 4800], ['쿠팡', '온라인', 38000], ['이마트', '마트', 92000], ['카카오T 택시', '교통', 14200], ['배달의민족', '온라인', 26000], ['교보문고', '기타', 18000], ['메가커피', '카페', 3200]];
   const cards = ['현대', '삼성', 'KB국민'];
-  const spend = [], trades = [];
+  const spend = [];
   let id = 1;
   for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
     seed = (d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate()) % 2147483646 + 1;
     rnd(); rnd();
-    const day = ymd(d), wk = d.getDay() > 0 && d.getDay() < 6;
-    if (wk && rnd() < .45) {
-      const n = 1 + Math.floor(rnd() * 3);
-      for (let i = 0; i < n; i++) {
-        const [tk, nm, px] = stocks[Math.floor(rnd() * stocks.length)];
-        const sell = rnd() < .55, qty = 1 + Math.floor(rnd() * 20);
-        trades.push({ id: 't' + id++, date: day, time: `${pad(9 + Math.floor(rnd() * 6))}:${pad(Math.floor(rnd() * 60))}`, ticker: tk, name: nm, side: sell ? '매도' : '매수', qty, price: Math.round(px * (0.95 + rnd() * .1)), fee: 0, pnl: sell ? Math.round((rnd() - .42) * 600000 / 100) * 100 : '', memo: '' });
-      }
-    }
+    const day = ymd(d);
     const n = Math.floor(rnd() * 4);
     for (let i = 0; i < n; i++) {
       const [mc, cat, base] = shops[Math.floor(rnd() * shops.length)];
@@ -643,7 +571,7 @@ function demoData(start, end) {
       spend.push({ id: id++, datetime: `${day} ${pad(8 + Math.floor(rnd() * 14))}:${pad(Math.floor(rnd() * 60))}`, date: day, card: cards[Math.floor(rnd() * 3)], status: '승인', amount: amt, currency: 'KRW', foreign_amount: '', installment: amt > 80000 && rnd() < .5 ? '3개월' : '일시불', merchant: mc, category: cat });
     }
   }
-  return { ok: true, spend, trades };
+  return { ok: true, spend };
 }
 
 // ------------------------------------------------------------- auth / events
@@ -699,12 +627,6 @@ $('grid').addEventListener('click', e => {
   $('detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 $('cards').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) { S.card = c.dataset.c; render(); } });
-$('mode').addEventListener('click', e => {
-  const b = e.target.closest('button'); if (!b) return;
-  S.mode = b.dataset.m;
-  [...$('mode').children].forEach(x => x.classList.toggle('on', x === b));
-  render();
-});
 let rz, lastWide = innerWidth >= 700;
 addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { const w = innerWidth >= 700; if (w !== lastWide) { lastWide = w; if (!$('app').classList.contains('hidden')) render(); } }, 150); });
 let tx = null, ty = null;

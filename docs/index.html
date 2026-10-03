@@ -43,9 +43,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .login-card p{color:var(--muted);margin-bottom:24px}
 .field{display:block;margin-bottom:12px}
 .field span{display:block;font-size:13px;color:var(--sub);margin-bottom:6px}
-.field input{width:100%;font:inherit;padding:13px 14px;border-radius:12px;border:1px solid var(--line);
-  background:var(--card);color:var(--ink);outline:none}
-.field input:focus{border-color:var(--ink)}
+.field input,.field select,.field textarea{width:100%;font:inherit;padding:12px 13px;border-radius:12px;border:1px solid var(--line);
+  background:var(--card);color:var(--ink);outline:none;-webkit-appearance:none;appearance:none}
+.field textarea{resize:vertical;min-height:64px;line-height:1.4}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--ink)}
+.field input:disabled,.field select:disabled{color:var(--muted);background:var(--chip)}
 .check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--sub);margin:4px 0 18px}
 .btn{display:block;width:100%;padding:14px;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:650}
 .link{color:var(--muted);font-size:13px;text-decoration:underline;margin-top:14px;display:inline-block}
@@ -128,6 +130,28 @@ header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88
   .cal,.stat{box-shadow:none;border:1px solid #ddd}
 }
 
+/* ---------- 입력 시트 ---------- */
+.ov{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.38);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:460px;max-height:92vh;overflow:auto;background:var(--bg);border-radius:18px 18px 0 0;
+  padding:16px 16px calc(env(safe-area-inset-bottom) + 16px)}
+@media (min-width:600px){ .ov{align-items:center} .sheet{border-radius:18px} }
+.sh-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.sh-hd h3{font-size:18px;font-weight:750}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sh-ft{display:flex;gap:8px;margin-top:4px}
+.sh-ft .btn{flex:1}
+.btn.ghost{background:var(--chip);color:var(--up);flex:0 0 96px}
+.btn.ghost.arm{background:var(--up);color:#fff}
+.btn:disabled{opacity:.5}
+.hint{font-size:12.5px;color:var(--muted);margin-top:10px}
+.subrow{display:flex;justify-content:space-between;align-items:center}
+.addlink{font-size:13px;font-weight:650;color:var(--ink);padding:4px 10px;border-radius:999px;background:var(--chip)}
+.row.sp{cursor:pointer}
+.row.sp:active{background:var(--chip)}
+.memo{font-size:12.5px;color:var(--sub);margin-top:2px;white-space:pre-wrap;word-break:break-all}
+.memo:before{content:'메모';font-size:10.5px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:5px}
+.tag.man{color:var(--sub)}
+
 /* ---------- panels ---------- */
 .panel{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);margin-top:14px;padding:16px}
 .panel h3{font-size:16px;font-weight:700;letter-spacing:-.01em;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
@@ -183,6 +207,7 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
       <button class="icon" id="next" aria-label="다음 달"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></button>
     </div>
     <div class="tools">
+      <button class="icon" id="addBtn" aria-label="지출 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       <button class="pill" id="todayBtn">오늘</button>
       <button class="icon" id="refresh" aria-label="새로고침"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></button>
       <button class="icon" id="logout" aria-label="로그아웃"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
@@ -212,6 +237,27 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
     <footer>© OSJ · 데이터는 Google 시트에만 저장됩니다</footer>
   </div>
 </main>
+<div class="ov hidden" id="ov">
+  <form class="sheet" id="spForm" autocomplete="off">
+    <div class="sh-hd"><h3 id="spTitle">지출 추가</h3>
+      <button type="button" class="icon" id="spClose" aria-label="닫기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="grid2">
+      <label class="field"><span>날짜</span><input id="fDate" type="date" required></label>
+      <label class="field"><span>시간 (선택)</span><input id="fTime" type="time"></label>
+    </div>
+    <label class="field"><span>금액 (원) · 환불은 앞에 −</span><input id="fAmt" type="text" inputmode="decimal" placeholder="12,500" required></label>
+    <label class="field"><span>사용처</span><input id="fMer" type="text" placeholder="예: 스타벅스 고덕점" required></label>
+    <div class="grid2">
+      <label class="field"><span>결제수단</span><select id="fCard"><option>현대</option><option>삼성</option><option>KB국민</option><option>현금</option><option>기타</option></select></label>
+      <label class="field"><span>카테고리</span><input id="fCat" list="catList" placeholder="기타"><datalist id="catList"></datalist></label>
+    </div>
+    <label class="field"><span>메모</span><textarea id="fMemo" rows="2" placeholder="예: 팀 회식, 아이 병원비"></textarea></label>
+    <label class="field" id="wtField"><span>쓰기 토큰 (이 기기에서 처음 한 번만)</span><input id="fWtok" type="password" autocomplete="off" placeholder="WRITE_TOKEN"></label>
+    <div class="err" id="spErr"></div>
+    <div class="sh-ft"><button type="button" class="btn ghost hidden" id="spDel">삭제</button><button class="btn" type="submit" id="spSave">저장</button></div>
+    <p class="hint" id="spHint"></p>
+  </form>
+</div>
 <div class="loading" id="loading">불러오는 중…</div>
 
 <script>
@@ -228,6 +274,7 @@ const store = {
 const S = {
   api: CFG.API_URL || store.get('tsc_api') || '',
   token: store.get('tsc_token') || '',
+  wtoken: store.get('tsc_wtoken') || '',
   y: 0, m: 0, sel: null, card: '전체', mode: 'all',
   cache: {}, data: { spend: [], trades: [] },
 };
@@ -443,16 +490,130 @@ function renderDetail(days) {
           <div class="s num">${esc(t.time || '')}${t.ticker && t.name ? ' · ' + esc(t.ticker) : ''}${q ? ` · ${q.toLocaleString('ko-KR')}주 × ${p.toLocaleString('ko-KR')}` : ''}${t.memo ? ' · ' + esc(t.memo) : ''}</div>
         </div><div class="v num ${cls(num(t.pnl))}">${num(t.pnl) ? signed(num(t.pnl), won) : '<span class="muted">—</span>'}</div></div>`;
     }).join('') : '<p class="empty">매매 없음</p>'}
-    <div class="sub">카드 ${spends.length}건</div>
+    <div class="sub subrow"><span>지출 ${spends.length}건</span><button class="addlink" type="button" data-add="${d}">+ 추가</button></div>
     ${spends.length ? spends.map(s => {
       const fx = s.amount === '' && s.currency && s.currency !== 'KRW';
       const a = num(s.amount);
-      return `<div class="row"><div class="a">
-          <div class="t">${esc(s.merchant || '(가맹점 미확인)')}</div>
-          <div class="s num">${esc(String(s.datetime || '').slice(11, 16))} · ${esc(s.card)}${s.installment && s.installment !== '일시불' ? ' · ' + esc(s.installment) : ''} · ${esc(s.category || '기타')}${s.status === '취소' ? ' · 취소' : ''}</div>
+      const tm = String(s.datetime || '').slice(11, 16);
+      return `<div class="row sp" data-id="${esc(s.id)}"><div class="a">
+          <div class="t">${isManual(s) ? '<span class="tag man">수기</span>' : ''}${esc(s.merchant || '(가맹점 미확인)')}</div>
+          <div class="s num">${tm ? esc(tm) + ' · ' : ''}${esc(s.card)}${s.installment && s.installment !== '일시불' ? ' · ' + esc(s.installment) : ''} · ${esc(s.category || '기타')}${s.status === '취소' ? ' · 취소' : ''}</div>
+          ${s.memo ? `<div class="memo">${esc(s.memo)}</div>` : ''}
         </div><div class="v num ${a < 0 ? 'down' : ''}">${fx ? esc(s.currency + ' ' + s.foreign_amount) : (a < 0 ? '−' + won(-a) : won(a))}</div></div>`;
-    }).join('') : '<p class="empty">지출 없음</p>'}`;
+    }).join('') : '<p class="empty">지출 없음 — 수기로 추가할 수 있어요</p>'}
+    ${spends.length ? '<p class="hint">결제 내역을 누르면 메모를 달거나 고칠 수 있습니다.</p>' : ''}`;
 }
+
+// ------------------------------------------------------------- 수기 입력 · 메모
+const isManual = s => String(s.id || '').startsWith('m-');
+const BASE_CATS = ['식비', '카페', '편의점', '마트', '교통', '온라인', '생활', '병원/약국', '육아', '경조사', '기타'];
+let editing = null, delArmed = false;
+
+function openSpend(s, dateForNew) {
+  editing = s || null; delArmed = false;
+  const manual = !s || isManual(s);
+  $('spTitle').textContent = !s ? '지출 추가' : manual ? '지출 수정' : '메모 · 카테고리';
+  $('fDate').value = s ? String(s.date || s.datetime).slice(0, 10) : (dateForNew || S.sel || ymd(new Date()));
+  $('fTime').value = s ? String(s.datetime || '').slice(11, 16) : '';
+  $('fAmt').value = s && s.amount !== '' ? num(s.amount).toLocaleString('ko-KR') : '';
+  $('fMer').value = s ? (s.merchant || '') : '';
+  $('fCard').value = s ? (['현대', '삼성', 'KB국민', '현금'].includes(s.card) ? s.card : '기타') : (S.card !== '전체' ? S.card : '현대');
+  $('fCat').value = s ? (s.category || '') : '';
+  $('fMemo').value = s ? (s.memo || '') : '';
+  const cats = new Set([...BASE_CATS, ...S.data.spend.map(x => x.category).filter(Boolean)]);
+  $('catList').innerHTML = [...cats].map(c => `<option value="${esc(c)}">`).join('');
+  ['fDate', 'fTime', 'fAmt', 'fMer', 'fCard'].forEach(id => { $(id).disabled = !manual; });
+  $('wtField').classList.toggle('hidden', !!S.wtoken || S.token === 'demo');
+  $('spDel').classList.toggle('hidden', !s);
+  $('spDel').classList.remove('arm'); $('spDel').textContent = '삭제';
+  $('spHint').textContent = manual ? '' : '카드 문자로 자동 입력된 내역은 카테고리와 메모만 고칠 수 있습니다.';
+  $('spErr').textContent = '';
+  $('spSave').disabled = false;
+  $('ov').classList.remove('hidden');
+  setTimeout(() => (manual && !s ? $('fAmt') : $('fMemo')).focus(), 50);
+}
+function closeSpend() { $('ov').classList.add('hidden'); editing = null; }
+
+async function apiWrite(payload) {
+  if (S.token === 'demo') return { ok: true };
+  const tok = S.wtoken || $('fWtok').value.trim();
+  if (!tok) return { ok: false, error: 'need_token' };
+  const res = await fetch(S.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ ...payload, token: tok }) });
+  const j = await res.json();
+  if (j.ok && !S.wtoken) { S.wtoken = tok; store.set('tsc_wtoken', tok); }
+  if (j.error === 'auth') { S.wtoken = ''; store.del('tsc_wtoken'); $('wtField').classList.remove('hidden'); }
+  return j;
+}
+function writeErr(j) {
+  return j.error === 'auth' ? '쓰기 토큰이 올바르지 않습니다. WRITE_TOKEN을 확인하세요.'
+    : j.error === 'need_token' ? '쓰기 토큰(WRITE_TOKEN)을 입력하세요.'
+    : j.error === 'not found' ? '시트에서 이 내역을 찾지 못했습니다. 새로고침 후 다시 시도하세요.'
+    : '저장 실패: ' + (j.error || '알 수 없는 오류');
+}
+function afterWrite(date) {
+  // 다른 달 캐시는 비우고, 현재 화면은 바로 반영
+  const cur = `${S.y}-${S.m}`;
+  Object.keys(S.cache).forEach(k => { if (k !== cur) delete S.cache[k]; });
+  S.sel = date;
+  const [y, m] = date.split('-').map(Number);
+  if (y !== S.y || m - 1 !== S.m) { S.y = y; S.m = m - 1; load(true); } else render();
+}
+
+$('spForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const manual = !editing || isManual(editing);
+  const date = $('fDate').value, time = $('fTime').value;
+  const amt = Math.round(num($('fAmt').value.replace(/[−–]/g, '-')));
+  const mer = $('fMer').value.trim(), cat = $('fCat').value.trim(), memo = $('fMemo').value.trim();
+  if (manual && (!date || !amt || !mer)) return ($('spErr').textContent = '날짜, 금액, 사용처를 입력하세요.');
+  $('spSave').disabled = true; $('spErr').textContent = '';
+  try {
+    let j;
+    if (!editing) {
+      const row = { id: 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date,
+        datetime: time ? `${date} ${time}` : date, card: $('fCard').value, status: amt < 0 ? '취소' : '승인',
+        amount: amt, currency: 'KRW', foreign_amount: '', installment: '', merchant: mer,
+        category: cat || '기타', raw: '수기 입력', memo };
+      j = await apiWrite({ kind: 'spend', op: 'add', rows: [row] });
+      if (j.ok) S.data.spend.push(row);
+    } else {
+      const fields = manual
+        ? { date, datetime: time ? `${date} ${time}` : date, card: $('fCard').value, amount: amt, merchant: mer, category: cat || '기타', memo }
+        : { category: cat || '기타', memo };
+      j = await apiWrite({ kind: 'spend', op: 'update', id: editing.id, fields });
+      if (j.ok) Object.assign(editing, fields);
+    }
+    if (!j.ok) { $('spErr').textContent = writeErr(j); $('spSave').disabled = false; return; }
+    closeSpend(); afterWrite(date);
+  } catch (err) {
+    $('spErr').textContent = '네트워크 오류: ' + err.message; $('spSave').disabled = false;
+  }
+});
+$('spDel').addEventListener('click', async () => {
+  if (!editing) return;
+  if (!delArmed) { delArmed = true; $('spDel').classList.add('arm'); $('spDel').textContent = '한 번 더'; return; }
+  $('spDel').disabled = true;
+  try {
+    const j = await apiWrite({ kind: 'spend', op: 'delete', id: editing.id });
+    if (!j.ok) { $('spErr').textContent = writeErr(j); return; }
+    const date = String(editing.date || editing.datetime).slice(0, 10);
+    S.data.spend = S.data.spend.filter(x => x !== editing);
+    S.cache[`${S.y}-${S.m}`] = S.data;
+    closeSpend(); afterWrite(date);
+  } catch (err) { $('spErr').textContent = '네트워크 오류: ' + err.message; }
+  finally { $('spDel').disabled = false; }
+});
+$('spClose').onclick = closeSpend;
+$('ov').addEventListener('click', e => { if (e.target === $('ov')) closeSpend(); });
+addEventListener('keydown', e => { if (e.key === 'Escape' && !$('ov').classList.contains('hidden')) closeSpend(); });
+$('fAmt').addEventListener('blur', () => { const v = Math.round(num($('fAmt').value.replace(/[−–]/g, '-'))); if (v) $('fAmt').value = v.toLocaleString('ko-KR'); });
+$('addBtn').onclick = () => openSpend(null, S.sel && S.sel.startsWith(`${S.y}-${pad(S.m + 1)}`) ? S.sel : ymd(new Date()));
+$('detail').addEventListener('click', e => {
+  const a = e.target.closest('[data-add]'); if (a) return openSpend(null, a.dataset.add);
+  const r = e.target.closest('.row.sp'); if (!r) return;
+  const s = S.data.spend.find(x => String(x.id) === r.dataset.id); if (s) openSpend(s);
+});
 
 // ------------------------------------------------------------- demo
 function demoData(start, end) {
@@ -492,8 +653,8 @@ function showApp() {
   load();
 }
 function logout(msg) {
-  store.del('tsc_token');
-  S.token = ''; S.cache = {};
+  store.del('tsc_token'); store.del('tsc_wtoken');
+  S.token = ''; S.wtoken = ''; S.cache = {};
   $('app').classList.add('hidden');
   $('login').classList.remove('hidden');
   $('loginErr').textContent = msg || '';

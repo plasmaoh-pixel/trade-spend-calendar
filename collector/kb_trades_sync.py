@@ -433,7 +433,7 @@ def print_rows(rows):
 
 
 # ------------------------------------------------------------- modes
-def sync(d_from, d_to):
+def sync(d_from, d_to, dry=False):
     """
     평단 기준점: kb_state.json (직전 동기화 직후의 실제 잔고 스냅샷)
     → 아직 처리하지 않은 체결만 순서대로 반영해 실현손익 계산
@@ -453,6 +453,9 @@ def sync(d_from, d_to):
     new = [e for e in execs if exec_uid(e) not in seen]
     rows, pos = compute_pnl(new, base)
     print_rows(rows)
+    if dry:
+        print(f"[확인용 --dry] 체결 {len(rows)}건 — 시트로 보내지 않았고 동기화 기록도 저장하지 않았습니다.")
+        return
     post_trades(rows)
     bal = fetch_balance()
     for t, p in pos.items():                          # 다 판 종목은 이름만 보존
@@ -563,8 +566,6 @@ if __name__ == "__main__":
     elif a.import_csv:
         import_csv(a.import_csv, a.dry)
     else:
-        if a.dry:
-            CONFIG["WEBAPP_URL"] = ""
         st = jload("kb_state.json", None)
         d_from = a.d_from or (st.get("last_day") if st and st.get("last_day") else today)
-        sync(d_from, a.d_to)
+        sync(d_from, a.d_to, dry=a.dry)

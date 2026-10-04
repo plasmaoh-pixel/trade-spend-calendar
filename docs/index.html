@@ -223,7 +223,7 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
       <div class="dow" id="dow"></div>
       <div class="grid" id="grid"></div>
     </div>
-    <div class="legend"><span>칸을 누르면 상세 · 좌우로 밀면 달 이동</span></div>
+    <div class="legend"><span>칸을 누르면 상세 · 좌우로 밀면 달 이동</span><span id="updated" style="margin-left:auto"></span></div>
     <div class="narrow">
       <div class="panel" id="detail"></div>
       <div class="panel" id="cats"></div>
@@ -240,7 +240,7 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
       <label class="field"><span>시간 (선택)</span><input id="fTime" type="time"></label>
     </div>
     <label class="field"><span>금액 (원) · 환불은 앞에 −</span><input id="fAmt" type="text" inputmode="decimal" placeholder="12,500" required></label>
-    <label class="field"><span>사용처</span><input id="fMer" type="text" placeholder="예: 스타벅스 고덕점" required></label>
+    <label class="field"><span>사용처</span><input id="fMer" type="text" placeholder="예: 스타벅스" required></label>
     <div class="grid2">
       <label class="field"><span>결제수단</span><select id="fCard"><option>현대</option><option>삼성</option><option>KB국민</option><option>현금</option><option>기타</option></select></label>
       <label class="field"><span>카테고리</span><input id="fCat" list="catList" placeholder="기타"><datalist id="catList"></datalist></label>
@@ -298,11 +298,14 @@ function gridRange(y, m) {
   return { start, end };
 }
 
-async function load(force) {
+let loading = false;
+async function load(force, silent) {
   const key = `${S.y}-${S.m}`;
   if (!force && S.cache[key]) { S.data = S.cache[key]; return render(); }
+  if (silent && loading) return;
   const { start, end } = gridRange(S.y, S.m);
-  toast(true);
+  loading = true;
+  if (!silent) toast(true);
   try {
     let d;
     if (S.token === 'demo') d = demoData(start, end);
@@ -315,14 +318,31 @@ async function load(force) {
         throw new Error(d.error || '응답 오류');
       }
     }
-    S.data = S.cache[key] = { spend: d.spend || [] };
-    render();
+    if (key !== `${S.y}-${S.m}`) return;              // 불러오는 사이 다른 달로 이동함
+    const next = { spend: d.spend || [] };
+    const changed = !S.cache[key] || JSON.stringify(S.cache[key].spend) !== JSON.stringify(next.spend);
+    S.data = S.cache[key] = next;
+    S.loadedAt = Date.now();
+    $('updated').textContent = '업데이트 ' + new Date().toTimeString().slice(0, 5);
+    if (!silent || changed) render();
   } catch (e) {
+    if (silent) return;                               // 자동 새로고침 실패는 조용히 무시
     S.data = { spend: [] };
     render();
     $('detail').innerHTML = `<h3>불러오기 실패</h3><p class="empty">${esc(e.message)} — API URL과 네트워크를 확인하세요.</p>`;
-  } finally { toast(false); }
+  } finally { loading = false; if (!silent) toast(false); }
 }
+
+// 자동 새로고침: 화면이 보이는 동안 2분마다, 앱으로 돌아오면 바로 (입력창이 열려 있으면 건너뜀)
+const AUTO_MS = 2 * 60 * 1000;
+function autoRefresh() {
+  if (!S.token || document.hidden || $('app').classList.contains('hidden') || !$('ov').classList.contains('hidden')) return;
+  if (Date.now() - (S.loadedAt || 0) < 30 * 1000) return;
+  load(true, true);
+}
+setInterval(autoRefresh, AUTO_MS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) autoRefresh(); });
+addEventListener('focus', autoRefresh);
 
 function aggregate() {
   const days = {};

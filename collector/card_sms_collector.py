@@ -20,6 +20,7 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import time
 import urllib.request
 
 # ============================== CONFIG ==============================
@@ -42,7 +43,7 @@ if os.path.exists(_local):
 
 # 카드사 판별 (위에서부터 순서대로 검사)
 CARD_PATTERNS = [
-    ("현대", r"현대카드"),
+    ("현대", r"현대카드|(^|\n)\s*현대\s+\S*?\d{3,4}\s*(승인|취소)"),   # "현대 대한항공030 승인" 형식 포함
     ("KB국민", r"KB국민|국민카드|KB카드"),
     ("삼성", r"삼성카드|삼성\s?\d[\d*]{3}"),
 ]
@@ -58,6 +59,8 @@ CATEGORY_RULES = [
 ]
 # ===================================================================
 
+PARSER_VERSION = 2   # 2: 현대카드 "현대 ○○030 승인" 형식, 후불하이패스 사용합계
+
 HEADERS = ["id", "datetime", "date", "card", "status", "amount",
            "currency", "foreign_amount", "installment", "merchant", "category", "raw"]
 
@@ -69,7 +72,7 @@ RE_INSTALL = re.compile(r"일시불|\d{1,2}\s*개월")
 RE_STATUS = re.compile(r"승인\s*취소|취소|승인")
 NOISE = [
     r"\[Web발신\]", r"\[국외발신\]",
-    r"현대카드\s*[A-Za-z0-9]*", r"KB국민카드|국민카드|KB카드|KB국민", r"삼성카드|삼성",
+    r"현대카드\s*[A-Za-z0-9]*", r"^\s*현대\s+\S*?\d{3,4}", r"KB국민카드|국민카드|KB카드|KB국민", r"삼성카드|삼성",
     r"승인\s*취소|승인|취소|체크|신용|해외",
     r"\S*\*\S*님?", r"\S+님",                 # 마스킹된 이름 (홍*동님)
     r"\(?\b[\d*]{4}\)?",                      # 카드번호 끝자리 (1*2* / (1234))
@@ -98,9 +101,10 @@ def parse_card_sms(text, msg_time):
     if not card or "거절" in text:
         return None
     m_status = RE_STATUS.search(text)
-    if not m_status:
+    hipass = "하이패스" in text and "합계" in text      # 후불하이패스 월 사용합계 문자 (승인 단어 없음)
+    if not m_status and not hipass:
         return None
-    status = "취소" if "취소" in m_status.group() else "승인"
+    status = "취소" if m_status and "취소" in m_status.group() else "승인"
 
     body = RE_CUMUL.sub("", text)                       # 누적/한도 금액 제거
     m_amt = RE_AMOUNT.search(body)
@@ -131,11 +135,13 @@ def parse_card_sms(text, msg_time):
         s = line
         for pat in [RE_DATETIME.pattern, RE_AMOUNT.pattern, RE_FOREIGN.pattern, RE_INSTALL.pattern] + NOISE:
             s = re.sub(pat, " ", s)
-        s = re.sub(r"\s+", " ", s).strip(" -:/()")
+        s = re.sub(r"\s+", " ", s).strip(" -:/()[]")
         if s:
             merchant = s
             break
 
+    if hipass:
+        merchant = "후불하이패스"
     return {
         "datetime": when.strftime("%Y-%m-%d %H:%M"),
         "date": when.strftime("%Y-%m-%d"),
@@ -238,6 +244,10 @@ def save_state(st):
 def append_csv(rows):
     path = os.path.join(CONFIG["WORK_DIR"], "spend_log.csv")
     new = not os.path.exists(path)
+    if not new:
+        with open(path, encoding="utf-8-sig") as f:
+            have = {r.get("id") for r in csv.DictReader(f)}
+        rows = [r for r in rows if str(r["id"]) not in have]
     with open(path, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=HEADERS)
         if new:
@@ -263,10 +273,18 @@ def post_webapp(rows):
 
 
 def git_pull():
+    """저장소 최신 코드 받기 — 2분마다 실행돼도 GitHub 조회는 10분에 한 번만."""
     if not CONFIG.get("AUTO_GIT_PULL"):
         return
     import subprocess
+    stamp = os.path.join(CONFIG["WORK_DIR"], ".last_pull")
     try:
+        if time.time() - os.path.getmtime(stamp) < 600:
+            return
+    except OSError:
+        pass
+    try:
+        open(stamp, "w").close()
         subprocess.run(["git", "-C", HERE, "pull", "--ff-only", "-q"],
                        timeout=60, capture_output=True)
     except Exception as e:
@@ -277,6 +295,8 @@ def collect():
     os.makedirs(CONFIG["WORK_DIR"], exist_ok=True)
     git_pull()
     st = load_state()
+    if st.get("parser_version", 1) < PARSER_VERSION:     # 인식 규칙이 바뀌면 지난 문자를 한 번 다시 읽음 (시트는 id로 중복 제거)
+        st["last_rowid"] = 0
     conn, tmp = open_chat_db_copy()
     try:
         since = None
@@ -301,8 +321,11 @@ def collect():
     if st.get("pending") and post_webapp(st["pending"]):
         st["pending"] = []
     st["last_rowid"] = max_id
+    st["parser_version"] = PARSER_VERSION
     save_state(st)
-    print(f"[{dt.datetime.now():%Y-%m-%d %H:%M}] 신규 카드 내역 {len(rows)}건")
+    now = dt.datetime.now()
+    if rows or st.get("pending") or now.minute < 2:       # 새 내역이 있을 때 + 매시 정각 무렵 1줄(동작 확인용)
+        print(f"[{now:%Y-%m-%d %H:%M}] 신규 카드 내역 {len(rows)}건")
 
 
 def scan(n):
@@ -323,12 +346,16 @@ def scan(n):
 
 
 SAMPLES = [
-    "[Web발신]\nKB국민카드1*2*승인\n홍*동님\n12,500원 일시불\n10/01 12:31\n스타벅스 고덕점\n누적1,234,560원",
+    "[Web발신]\nKB국민카드1*2*승인\n홍*동님\n12,500원 일시불\n10/01 12:31\n스타벅스\n누적1,234,560원",
     "[Web발신]\n삼성1234승인 홍*동\n89,000원 03개월\n10/01 19:05 쿠팡\n누적845,000원",
-    "[Web발신]\n현대카드 M 승인\n홍*동\n4,800원 일시불\n10/01 08:12\nGS25 평택고덕점\n누적 512,300원",
-    "[Web발신]\n현대카드 M 승인취소\n홍*동\n4,800원 일시불\n10/01 08:40\nGS25 평택고덕점",
+    "[Web발신]\n현대카드 M 승인\n홍*동\n4,800원 일시불\n10/01 08:12\nGS25\n누적 512,300원",
+    "[Web발신]\n현대카드 M 승인취소\n홍*동\n4,800원 일시불\n10/01 08:40\nGS25",
     "[Web발신]\nKB국민카드1*2*해외승인\n홍*동님\nUSD 25.99\n09/30 23:10\nNETFLIX.COM",
     "[Web발신]\n삼성증권 체결 안내 삼성전자 10주 매수",  # 카드 문자 아님 → None
+    "[Web발신]\n현대 대한항공030 승인\n오*주\n15,800원 일시불\n10/02 08:13\n스타벅스코리아\n누적605,206원",
+    "[Web발신]\n[삼성카드]8807\n10월접수 후불하이패스\n사용합계\n7,600원",
+    "[Web발신]\n[삼성카드]7166 10/02 09:25 네이버페이 10,900원 승인거절 이용정지카드",  # 거절 → None
+    "[Web발신]\n[프리미엄콘텐츠] 블랙 아카데미 1개월 이용권 10,900원이 결제되었습니다.",  # 카드 문자 아님 → None
 ]
 
 

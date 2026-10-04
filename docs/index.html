@@ -46,6 +46,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .field input,.field select,.field textarea{width:100%;font:inherit;padding:12px 13px;border-radius:12px;border:1px solid var(--line);
   background:var(--card);color:var(--ink);outline:none;-webkit-appearance:none;appearance:none}
 .field textarea{resize:vertical;min-height:64px;line-height:1.4}
+.field select{padding-right:34px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238a8a8e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 13px center;text-overflow:ellipsis}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--ink)}
 .field input:disabled,.field select:disabled{color:var(--muted);background:var(--chip)}
 .check{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--sub);margin:4px 0 18px}
@@ -243,7 +245,8 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
     <label class="field"><span>사용처</span><input id="fMer" type="text" placeholder="예: 스타벅스" required></label>
     <div class="grid2">
       <label class="field"><span>결제수단</span><select id="fCard"><option>현대</option><option>삼성</option><option>KB국민</option><option>현금</option><option>기타</option></select></label>
-      <label class="field"><span>카테고리</span><input id="fCat" list="catList" placeholder="기타"><datalist id="catList"></datalist></label>
+      <label class="field"><span>카테고리</span><select id="fCat"></select>
+        <input id="fCatNew" type="text" class="hidden" placeholder="새 카테고리 이름" maxlength="20" style="margin-top:6px"></label>
     </div>
     <label class="field"><span>메모</span><textarea id="fMemo" rows="2" placeholder="예: 팀 회식, 아이 병원비"></textarea></label>
     <label class="field" id="wtField"><span>쓰기 토큰 (이 기기에서 처음 한 번만)</span><input id="fWtok" type="password" autocomplete="off" placeholder="WRITE_TOKEN"></label>
@@ -270,7 +273,7 @@ const S = {
   token: store.get('tsc_token') || '',
   wtoken: store.get('tsc_wtoken') || '',
   y: 0, m: 0, sel: null, card: '전체', mode: 'all',
-  cache: {}, data: { spend: [] },
+  cache: {}, data: { spend: [] }, cats: [],
 };
 
 // ------------------------------------------------------------- utils
@@ -319,6 +322,7 @@ async function load(force, silent) {
       }
     }
     if (key !== `${S.y}-${S.m}`) return;              // 불러오는 사이 다른 달로 이동함
+    if (Array.isArray(d.categories) && d.categories.length) S.cats = d.categories.map(String);
     const next = { spend: d.spend || [] };
     const changed = !S.cache[key] || JSON.stringify(S.cache[key].spend) !== JSON.stringify(next.spend);
     S.data = S.cache[key] = next;
@@ -464,6 +468,34 @@ function renderDetail(days) {
 // ------------------------------------------------------------- 수기 입력 · 메모
 const isManual = s => String(s.id || '').startsWith('m-');
 const BASE_CATS = ['식비', '카페', '편의점', '마트', '교통', '온라인', '생활', '병원/약국', '육아', '경조사', '기타'];
+const NEW_CAT = '__new__';
+function catList() {
+  const list = (S.cats && S.cats.length ? S.cats : BASE_CATS).filter(c => c && c !== '기타');
+  return [...list, '기타'];                        // '기타'는 항상 맨 끝
+}
+function fillCats(current) {
+  const list = catList();
+  const opts = list.includes(current) ? list : [...list, current];   // 목록에 없는 기존 값도 보존
+  $('fCat').innerHTML = opts.map(c => `<option value="${esc(c)}"${c === current ? ' selected' : ''}>${esc(c)}</option>`).join('')
+    + `<option value="${NEW_CAT}">+ 새 카테고리 추가…</option>`;
+  $('fCatNew').value = ''; $('fCatNew').classList.add('hidden');
+}
+$('fCat').addEventListener('change', () => {
+  const isNew = $('fCat').value === NEW_CAT;
+  $('fCatNew').classList.toggle('hidden', !isNew);
+  if (isNew) $('fCatNew').focus();
+});
+async function resolveCat() {
+  // 새 카테고리면 목록(시트)에 먼저 등록하고 그 이름을 돌려줌
+  if ($('fCat').value !== NEW_CAT) return { ok: true, cat: $('fCat').value || '기타' };
+  const name = $('fCatNew').value.trim().replace(/\s+/g, ' ');
+  if (!name) return { ok: false, error: 'need_cat' };
+  if (catList().includes(name)) return { ok: true, cat: name };
+  const j = await apiWrite({ kind: 'cats', op: 'add', rows: [{ id: name, category: name }] });
+  if (!j.ok) return j;
+  S.cats = [...catList().filter(c => c !== '기타'), name, '기타'];
+  return { ok: true, cat: name };
+}
 let editing = null, delArmed = false;
 
 function openSpend(s, dateForNew) {
@@ -475,10 +507,8 @@ function openSpend(s, dateForNew) {
   $('fAmt').value = s && s.amount !== '' ? num(s.amount).toLocaleString('ko-KR') : '';
   $('fMer').value = s ? (s.merchant || '') : '';
   $('fCard').value = s ? (['현대', '삼성', 'KB국민', '현금'].includes(s.card) ? s.card : '기타') : (S.card !== '전체' ? S.card : '현대');
-  $('fCat').value = s ? (s.category || '') : '';
+  fillCats(s ? (s.category || '기타') : '기타');
   $('fMemo').value = s ? (s.memo || '') : '';
-  const cats = new Set([...BASE_CATS, ...S.data.spend.map(x => x.category).filter(Boolean)]);
-  $('catList').innerHTML = [...cats].map(c => `<option value="${esc(c)}">`).join('');
   ['fDate', 'fTime', 'fAmt', 'fMer', 'fCard'].forEach(id => { $(id).disabled = !manual; });
   $('wtField').classList.toggle('hidden', !!S.wtoken || S.token === 'demo');
   $('spDel').classList.toggle('hidden', !s);
@@ -522,10 +552,14 @@ $('spForm').addEventListener('submit', async e => {
   const manual = !editing || isManual(editing);
   const date = $('fDate').value, time = $('fTime').value;
   const amt = Math.round(num($('fAmt').value.replace(/[−–]/g, '-')));
-  const mer = $('fMer').value.trim(), cat = $('fCat').value.trim(), memo = $('fMemo').value.trim();
+  const mer = $('fMer').value.trim(), memo = $('fMemo').value.trim();
   if (manual && (!date || !amt || !mer)) return ($('spErr').textContent = '날짜, 금액, 사용처를 입력하세요.');
+  if ($('fCat').value === NEW_CAT && !$('fCatNew').value.trim()) return ($('spErr').textContent = '새 카테고리 이름을 입력하세요.');
   $('spSave').disabled = true; $('spErr').textContent = '';
   try {
+    const rc = await resolveCat();
+    if (!rc.ok) { $('spErr').textContent = writeErr(rc); $('spSave').disabled = false; return; }
+    const cat = rc.cat;
     let j;
     if (!editing) {
       const row = { id: 'm-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date,
@@ -591,7 +625,7 @@ function demoData(start, end) {
       spend.push({ id: id++, datetime: `${day} ${pad(8 + Math.floor(rnd() * 14))}:${pad(Math.floor(rnd() * 60))}`, date: day, card: cards[Math.floor(rnd() * 3)], status: '승인', amount: amt, currency: 'KRW', foreign_amount: '', installment: amt > 80000 && rnd() < .5 ? '3개월' : '일시불', merchant: mc, category: cat });
     }
   }
-  return { ok: true, spend };
+  return { ok: true, spend, categories: BASE_CATS };
 }
 
 // ------------------------------------------------------------- auth / events

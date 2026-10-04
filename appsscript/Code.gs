@@ -1,10 +1,12 @@
 /**
  * 카드 지출 달력 API (Google Apps Script 웹앱)  —  Copyright (c) OSJ
  *
- *  GET  ?token=READ_TOKEN&from=YYYY-MM-DD&to=YYYY-MM-DD  → { ok, spend:[...] }
+ *  GET  ?token=READ_TOKEN&from=YYYY-MM-DD&to=YYYY-MM-DD  → { ok, spend:[...], categories:[...] }
  *  POST { token: WRITE_TOKEN, kind: 'spend', op: 'add' (기본), rows: [...] }                    → { ok, added }
  *  POST { token: WRITE_TOKEN, kind, op: 'update', id, fields: { memo, category, ... } }      → { ok, updated }
  *  POST { token: WRITE_TOKEN, kind, op: 'delete', id }                                       → { ok, deleted }
+ *  POST { token: WRITE_TOKEN, kind: 'cats', rows: [{ id: '이름', category: '이름' }] }          → 카테고리 추가
+ *  카테고리 목록은 'Categories' 시트 B열 — 시트에서 직접 추가·삭제·순서 변경해도 됩니다.
  *
  *  비밀값(토큰)은 코드가 아니라 '스크립트 속성'에 저장됩니다. → GitHub에 올려도 안전
  *  최초 1회: 편집기에서 setup() 실행 → 실행 로그에 READ / WRITE 토큰 출력
@@ -20,7 +22,14 @@ const SHEETS = {
     editable: ['date', 'datetime', 'card', 'amount', 'installment', 'merchant', 'category', 'memo'],
     autoEditable: ['category', 'memo'],
   },
+  cats: {
+    name: 'Categories',
+    headers: ['id', 'category'],
+    editable: ['category'],
+    autoEditable: ['category'],
+  },
 };
+const DEFAULT_CATS = ['식비', '카페', '편의점', '마트', '교통', '온라인', '생활', '병원/약국', '육아', '경조사', '기타'];
 const PROPS = PropertiesService.getScriptProperties();
 const TZ = Session.getScriptTimeZone() || 'Asia/Seoul';
 
@@ -48,6 +57,7 @@ function doGet(e) {
   return out_({
     ok: true,
     spend: read_('spend', from, to),
+    categories: categories_(),
   });
 }
 
@@ -104,6 +114,19 @@ function doPost(e) {
 }
 
 // ---------------------------------------------------------------- helpers
+/** 카테고리 목록 (시트 순서 유지). 비어 있으면 기본 목록으로 채움 */
+function categories_() {
+  const sh = sheet_('cats');
+  if (sh.getLastRow() < 2) {
+    sh.getRange(2, 1, DEFAULT_CATS.length, 2).setValues(DEFAULT_CATS.map(c => [c, c]));
+  }
+  const head = headers_(sh, SHEETS.cats);
+  const iCat = head.indexOf('category');
+  const seen = new Set();
+  return sh.getRange(2, iCat + 1, sh.getLastRow() - 1, 1).getValues().flat()
+    .map(v => String(v).trim()).filter(v => v && !seen.has(v) && seen.add(v));
+}
+
 function auth_(token, prop) {
   const t = PROPS.getProperty(prop);
   return !!t && token === t;

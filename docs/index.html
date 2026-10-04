@@ -16,6 +16,7 @@
   --bg:#f6f5f2; --card:#ffffff; --ink:#1c1c1e; --sub:#55555a; --muted:#8a8a8e; --line:#e7e5e0;
   --up:#d93a3a; --down:#2f6bdc; --spend:#5d5d63; --accent:#1c1c1e; --accent-ink:#fff;
   --today:#f1b434; --chip:#efede8; --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300; --c7:#4a3aa7; --c-other:#a8a7a2;
   --r:14px;
 }
 @media (prefers-color-scheme: dark){
@@ -23,6 +24,7 @@
     --bg:#111113; --card:#1b1b1e; --ink:#ededf0; --sub:#b4b4ba; --muted:#86868c; --line:#2a2a2f;
     --up:#ff6b6b; --down:#6d9bff; --spend:#a5a5ab; --accent:#ededf0; --accent-ink:#111113;
     --today:#f1b434; --chip:#26262a; --shadow:none;
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --c7:#9085e9; --c-other:#6b6a66;
   }
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -154,6 +156,29 @@ header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88
 .memo:before{content:'메모';font-size:10.5px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:5px}
 .tag.man{color:var(--sub)}
 
+/* ---------- 카드별 사용 현황 ---------- */
+.crow{display:block;width:100%;text-align:left;padding:10px 0;border-top:1px solid var(--line)}
+.crow:first-of-type{border-top:0}
+.crow .top{display:grid;grid-template-columns:64px 1fr auto 14px;align-items:center;gap:10px;font-size:14px}
+.crow .nm{font-weight:650}
+.crow .amt{font-weight:650;white-space:nowrap}
+.crow .chev{color:var(--muted);transition:transform .15s;font-size:12px}
+.crow.open .chev{transform:rotate(90deg)}
+.crow .s{font-size:12px;color:var(--muted);margin:3px 0 0 74px}
+.crow .track{height:8px;border-radius:999px;background:var(--chip);overflow:hidden}
+.crow .fill{height:100%;background:var(--spend);border-radius:999px}
+.donut{display:flex;align-items:center;gap:18px;padding:6px 0 14px;flex-wrap:wrap}
+.donut svg{width:150px;height:150px;flex:none}
+.donut .seg{transition:opacity .15s}
+.donut svg:hover .seg{opacity:.45}
+.donut svg .seg:hover{opacity:1}
+.donut .ctr1{font-size:15px;font-weight:750;fill:var(--ink)}
+.donut .ctr2{font-size:10px;fill:var(--muted)}
+.lg{flex:1;min-width:180px}
+.lg .li{display:grid;grid-template-columns:10px 1fr auto 42px;align-items:center;gap:8px;font-size:13px;padding:3px 0}
+.lg .sw{width:10px;height:10px;border-radius:3px}
+.lg .pc{color:var(--muted);text-align:right}
+
 /* ---------- panels ---------- */
 .panel{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);margin-top:14px;padding:16px}
 .panel h3{font-size:16px;font-weight:700;letter-spacing:-.01em;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
@@ -171,7 +196,25 @@ header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88
 .daytot b{font-weight:700}
 .empty{color:var(--muted);font-size:14px;padding:6px 0}
 .wk .row{padding:8px 0}
-.bars .b{display:grid;grid-template-columns:72px 1fr auto;align-items:center;gap:10px;padding:5px 0;font-size:13.5px}
+.bars .b{display:grid;grid-template-columns:72px 1fr 52px 14px;align-items:center;gap:10px;padding:7px 0;font-size:13.5px;width:100%;text-align:left}
+.bars .b .num{text-align:right}
+.bars .b .chev{color:var(--muted);font-size:11px;transition:transform .15s}
+.bars .b.open .chev{transform:rotate(90deg)}
+.bars .b.open span:first-child{font-weight:700}
+.trend{padding:4px 0 12px}
+.trend svg{width:100%;height:auto;display:block}
+.trend .bar{fill:var(--c1);opacity:.45}
+.trend .bar.cur{opacity:1}
+.trend .hit{fill:transparent;cursor:pointer}
+.trend .hit:hover + .bar,.trend g:hover .bar{opacity:.85}
+.trend .ax{font-size:9px;fill:var(--muted)}
+.trend .vl{font-size:9px;fill:var(--sub);font-weight:600}
+.trend .base{stroke:var(--line);stroke-width:1}
+.trend .meta{display:flex;gap:14px;font-size:12.5px;color:var(--sub);margin:2px 0 8px}
+.trend .meta b{color:var(--ink)}
+.mrow{display:grid;grid-template-columns:1fr auto 44px;gap:10px;font-size:13px;padding:6px 0;border-top:1px solid var(--line);width:100%;text-align:left}
+.mrow.cur{font-weight:700}
+.mrow .n{color:var(--muted);text-align:right}
 .bars .track{height:8px;border-radius:999px;background:var(--chip);overflow:hidden}
 .bars .fill{height:100%;background:var(--spend);border-radius:999px}
 .loading{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);
@@ -229,6 +272,7 @@ footer{text-align:center;color:var(--muted);font-size:11.5px;margin-top:22px}
     <div class="narrow">
       <div class="panel" id="detail"></div>
       <div class="panel" id="cats"></div>
+      <div class="panel" id="cardsPanel"></div>
     </div>
     <footer>© OSJ · 데이터는 Google 시트에만 저장됩니다</footer>
   </div>
@@ -325,6 +369,7 @@ async function load(force, silent) {
     if (Array.isArray(d.categories) && d.categories.length) S.cats = d.categories.map(String);
     const next = { spend: d.spend || [] };
     const changed = !S.cache[key] || JSON.stringify(S.cache[key].spend) !== JSON.stringify(next.spend);
+    if (changed) S.range = {};
     S.data = S.cache[key] = next;
     S.loadedAt = Date.now();
     $('updated').textContent = '업데이트 ' + new Date().toTimeString().slice(0, 5);
@@ -431,10 +476,124 @@ function render() {
   const ce = Object.entries(cats).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const cmax = Math.max(1, ...ce.map(c => c[1]));
   $('cats').innerHTML = `<h3>카테고리별 지출 <small>${S.card === '전체' ? '전체 카드' : S.card}</small></h3>` + (ce.length
-    ? `<div class="bars">${ce.map(([k, v]) => `<div class="b"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / cmax * 100).toFixed(1)}%"></div></div><span class="num">${compact(v)}</span></div>`).join('')}</div>`
+    ? `<div class="bars">${ce.map(([k, v]) => `<button type="button" class="b${S.catOpen === k ? ' open' : ''}" data-cat="${esc(k)}"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${(v / cmax * 100).toFixed(1)}%"></div></div><span class="num">${compact(v)}</span><span class="chev">▶</span></button>${S.catOpen === k ? '<div class="trend" id="trend"><p class="empty">최근 12개월 불러오는 중…</p></div>' : ''}`).join('')}</div><p class="hint">카테고리를 누르면 최근 12개월 추이를 볼 수 있습니다.</p>`
     : '<p class="empty">이번 달 지출 내역이 없습니다.</p>');
+  if (S.catOpen && ce.some(([k]) => k === S.catOpen)) renderTrend(S.catOpen);
+  else S.catOpen = null;
 
   renderDetail(days);
+  renderCards();
+}
+
+// ------------------------------------------------------------- 카테고리 월별 추이 (최근 12개월)
+S.range = {};
+async function fetchRange(from, to) {
+  const key = `${from}~${to}`;
+  if (S.range[key]) return S.range[key];
+  let d;
+  if (S.token === 'demo') d = demoData(new Date(from + 'T00:00:00'), new Date(to + 'T00:00:00'));
+  else {
+    const res = await fetch(`${S.api}?token=${encodeURIComponent(S.token)}&from=${from}&to=${to}&_=${Date.now()}`);
+    d = await res.json();
+    if (!d.ok) throw new Error(d.error || '응답 오류');
+  }
+  return (S.range[key] = d.spend || []);
+}
+
+async function renderTrend(cat) {
+  const end = new Date(S.y, S.m + 1, 0), start = new Date(S.y, S.m - 11, 1);
+  const months = [];
+  for (let i = 0; i < 12; i++) { const d = new Date(start.getFullYear(), start.getMonth() + i, 1); months.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`); }
+  let list;
+  try { list = await fetchRange(ymd(start), ymd(end)); }
+  catch (e) { if ($('trend')) $('trend').innerHTML = `<p class="empty">불러오기 실패: ${esc(e.message)}</p>`; return; }
+  const el = $('trend'); if (!el || S.catOpen !== cat) return;          // 그 사이 닫았거나 다른 항목을 엶
+  const agg = Object.fromEntries(months.map(m => [m, { amt: 0, n: 0 }]));
+  for (const s of list) {
+    if ((s.category || '기타') !== cat || s.amount === '') continue;
+    if (S.card !== '전체' && s.card !== S.card) continue;
+    const m = String(s.date || s.datetime).slice(0, 7);
+    if (agg[m]) { agg[m].amt += num(s.amount); agg[m].n++; }
+  }
+  const cur = `${S.y}-${pad(S.m + 1)}`;
+  const vals = months.map(m => Math.max(0, agg[m].amt));
+  const max = Math.max(1, ...vals);
+  const used = months.filter(m => agg[m].n > 0);
+  const avg = used.length ? used.reduce((a, m) => a + agg[m].amt, 0) / used.length : 0;
+  const W = 320, H = 132, top = 16, base = 112, slotW = W / 12, bw = Math.min(16, slotW * 0.56);
+  const bars = months.map((m, i) => {
+    const v = vals[i], h = v > 0 ? Math.max(2, (v / max) * (base - top)) : 0;
+    const x = i * slotW + (slotW - bw) / 2, y = base - h, isCur = m === cur;
+    const r = Math.min(4, h / 2);
+    const shape = h > 0 ? `<path class="bar${isCur ? ' cur' : ''}" d="M${x},${base} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${base} Z"/>` : '';
+    const lbl = (isCur || v === max) && v > 0 ? `<text class="vl num" x="${x + bw / 2}" y="${y - 4}" text-anchor="middle">${compact(v)}</text>` : '';
+    const mon = Number(m.slice(5));
+    return `<g data-month="${m}"><title>${m.replace('-', '년 ')}월 ${won(agg[m].amt)} · ${agg[m].n}건</title>
+      <rect class="hit" x="${i * slotW}" y="0" width="${slotW}" height="${H}"/>${shape}${lbl}
+      <text class="ax" x="${i * slotW + slotW / 2}" y="${base + 13}" text-anchor="middle">${mon}월</text></g>`;
+  }).join('');
+  const rows = [...months].reverse().filter(m => agg[m].n > 0).map(m => `<button type="button" class="mrow${m === cur ? ' cur' : ''}" data-month="${m}">
+      <span>${m.slice(0, 4)}년 ${Number(m.slice(5))}월</span><span class="num">${won(agg[m].amt)}</span><span class="n num">${agg[m].n}건</span></button>`).join('');
+  el.innerHTML = `<div class="meta"><span>12개월 합계 <b class="num">${compact(vals.reduce((a, b) => a + b, 0))}</b></span><span>쓴 달 평균 <b class="num">${compact(avg)}</b></span>${S.card !== '전체' ? `<span>${esc(S.card)}만</span>` : ''}</div>
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(cat)} 월별 지출"><line class="base" x1="0" x2="${W}" y1="${base}" y2="${base}"/>${bars}</svg>
+    ${rows || '<p class="empty">최근 12개월 이 카테고리 지출이 없습니다.</p>'}`;
+}
+
+// ------------------------------------------------------------- 카드별 사용 현황 + 카테고리 도넛
+function renderCards() {
+  const mm = `${S.y}-${pad(S.m + 1)}`;
+  const sp = S.data.spend.filter(s => String(s.date || s.datetime).startsWith(mm) && s.amount !== '');
+  const by = {}, catTot = {};
+  let total = 0;
+  for (const s of sp) {
+    const a = num(s.amount), c = s.card || '기타', k = s.category || '기타';
+    const g = by[c] || (by[c] = { amt: 0, n: 0, items: [] });
+    g.amt += a; g.n++; g.items.push(s); total += a;
+    catTot[k] = (catTot[k] || 0) + a;
+  }
+  // 색은 카테고리를 따라감(카드를 바꿔도 같은 색): 이번 달 전체 상위 7개 → 고정 슬롯, 나머지는 '그 외'
+  const ranked = Object.entries(catTot).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 7);
+  const slot = k => ranked.indexOf(k);
+  const cards = Object.keys(by).sort((a, b) => by[b].amt - by[a].amt);
+  const max = Math.max(1, ...cards.map(c => by[c].amt));
+  if (S.cardOpen && !by[S.cardOpen]) S.cardOpen = null;
+  $('cardsPanel').innerHTML = `<h3>카드별 사용 현황 <small>${cards.length ? '눌러서 카테고리 보기' : ''}</small></h3>` + (cards.length ? cards.map(c => {
+    const g = by[c], open = S.cardOpen === c;
+    const share = total > 0 ? Math.round(g.amt / total * 100) : 0;
+    return `<button type="button" class="crow${open ? ' open' : ''}" data-card="${esc(c)}" aria-expanded="${open}">
+        <div class="top"><span class="nm">${esc(c)}</span><div class="track"><div class="fill" style="width:${Math.max(0, g.amt / max * 100).toFixed(1)}%"></div></div>
+        <span class="amt num">${won(g.amt)}</span><span class="chev">▶</span></div>
+        <div class="s num">${g.n}건 · ${share}%</div></button>${open ? donutHTML(g.items, slot) : ''}`;
+  }).join('') : '<p class="empty">이번 달 카드 사용 내역이 없습니다.</p>');
+}
+
+function donutHTML(items, slot) {
+  const agg = {};
+  for (const s of items) {
+    const k = s.category || '기타', key = slot(k) >= 0 ? k : '그 외';
+    agg[key] = (agg[key] || 0) + num(s.amount);
+  }
+  const segs = Object.entries(agg).filter(([, v]) => v > 0)
+    .sort((a, b) => (a[0] === '그 외') - (b[0] === '그 외') || b[1] - a[1]);
+  const sum = segs.reduce((a, [, v]) => a + v, 0);
+  if (!sum) return '<div class="donut"><p class="empty">표시할 카테고리 금액이 없습니다.</p></div>';
+  const r = 46, C = 2 * Math.PI * r, gap = segs.length > 1 ? 2 : 0;
+  let off = 0;
+  const color = k => k === '그 외' ? 'var(--c-other)' : `var(--c${slot(k) + 1})`;
+  const arcs = segs.map(([k, v]) => {
+    const len = C * v / sum, dash = Math.max(len - gap, 0.01);
+    const el = `<circle class="seg" cx="60" cy="60" r="${r}" fill="none" stroke="${color(k)}" stroke-width="16"
+      stroke-dasharray="${dash.toFixed(2)} ${(C - dash).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"
+      transform="rotate(-90 60 60)"><title>${esc(k)} ${won(v)} (${Math.round(v / sum * 100)}%)</title></circle>`;
+    off += len;
+    return el;
+  }).join('');
+  const lg = segs.map(([k, v]) => `<div class="li"><span class="sw" style="background:${color(k)}"></span><span>${esc(k)}</span>
+      <span class="num">${won(v)}</span><span class="pc num">${Math.round(v / sum * 100)}%</span></div>`).join('');
+  return `<div class="donut"><svg viewBox="0 0 120 120" role="img" aria-label="카테고리별 비율">${arcs}
+      <text class="ctr1 num" x="60" y="60" text-anchor="middle">${compact(sum)}</text>
+      <text class="ctr2" x="60" y="75" text-anchor="middle">${items.length}건</text></svg>
+    <div class="lg">${lg}</div></div>`;
 }
 
 function renderDetail(days) {
@@ -542,6 +701,7 @@ function afterWrite(date) {
   // 다른 달 캐시는 비우고, 현재 화면은 바로 반영
   const cur = `${S.y}-${S.m}`;
   Object.keys(S.cache).forEach(k => { if (k !== cur) delete S.cache[k]; });
+  S.range = {};
   S.sel = date;
   const [y, m] = date.split('-').map(Number);
   if (y !== S.y || m - 1 !== S.m) { S.y = y; S.m = m - 1; load(true); } else render();
@@ -679,6 +839,22 @@ $('grid').addEventListener('click', e => {
   if (y !== S.y || m - 1 !== S.m) { S.y = y; S.m = m - 1; return load(); }
   render();
   $('detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+$('cats').addEventListener('click', e => {
+  const mo = e.target.closest('[data-month]');
+  if (mo) {                                                    // 막대·월 목록 → 그 달로 이동
+    const [y, m] = mo.dataset.month.split('-').map(Number);
+    if (y !== S.y || m - 1 !== S.m) { S.y = y; S.m = m - 1; S.sel = null; load(); scrollTo({ top: 0, behavior: 'smooth' }); }
+    return;
+  }
+  const b = e.target.closest('[data-cat]'); if (!b) return;
+  S.catOpen = S.catOpen === b.dataset.cat ? null : b.dataset.cat;
+  render();
+});
+$('cardsPanel').addEventListener('click', e => {
+  const b = e.target.closest('[data-card]'); if (!b) return;
+  S.cardOpen = S.cardOpen === b.dataset.card ? null : b.dataset.card;
+  renderCards();
 });
 $('cards').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) { S.card = c.dataset.c; render(); } });
 let rz, lastWide = innerWidth >= 700;

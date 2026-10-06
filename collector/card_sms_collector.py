@@ -33,6 +33,7 @@ CONFIG = {
     "WEBAPP_URL": "",                                     # Apps Script 웹앱 URL (비우면 CSV만 저장)
     "WRITE_TOKEN": "",                                    # setup() 로그의 WRITE_TOKEN
     "FIRST_RUN_LOOKBACK_DAYS": 30,                        # 첫 실행 시 과거 며칠치까지 가져올지
+    "RECHECK_DAYS": 3,                                    # 매 실행마다 최근 며칠치를 다시 확인 (본문이 늦게 채워지는 문자 대비)
     "AUTO_GIT_PULL": True,                                # 실행 시 저장소 최신 코드 받기 (다음 실행부터 반영)
 }
 _local = os.path.join(HERE, "config.local.json")
@@ -59,7 +60,7 @@ CATEGORY_RULES = [
 ]
 # ===================================================================
 
-PARSER_VERSION = 2   # 2: 현대카드 "현대 ○○030 승인" 형식, 후불하이패스 사용합계
+PARSER_VERSION = 3   # 2: 현대카드 "현대 ○○030 승인" 형식, 후불하이패스 사용합계 / 3: 본문 늦게 채워진 문자 재확인
 
 HEADERS = ["id", "datetime", "date", "card", "status", "amount",
            "currency", "foreign_amount", "installment", "merchant", "category", "raw"]
@@ -248,11 +249,14 @@ def append_csv(rows):
         with open(path, encoding="utf-8-sig") as f:
             have = {r.get("id") for r in csv.DictReader(f)}
         rows = [r for r in rows if str(r["id"]) not in have]
+    if not rows and not new:
+        return rows
     with open(path, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=HEADERS)
         if new:
             w.writeheader()
         w.writerows(rows)
+    return rows          # 이번에 처음 기록된 건만
 
 
 def post_webapp(rows):
@@ -285,8 +289,11 @@ def git_pull():
         pass
     try:
         open(stamp, "w").close()
-        subprocess.run(["git", "-C", HERE, "pull", "--ff-only", "-q"],
-                       timeout=60, capture_output=True)
+        g = lambda *a: subprocess.run(["git", "-C", HERE, *a], timeout=60, capture_output=True)
+        if g("pull", "--ff-only", "-q").returncode != 0:
+            # 맥에 미리 넣어둔 수정본이 GitHub 최신본과 똑같으면 그쪽으로 맞춤 (다르면 건드리지 않음)
+            if g("fetch", "-q").returncode == 0 and g("diff", "--quiet", "@{u}").returncode == 0:
+                g("reset", "--hard", "-q", "@{u}")
     except Exception as e:
         print(f"[경고] git pull 실패: {e}")
 
@@ -299,13 +306,17 @@ def collect():
         st["last_rowid"] = 0
     conn, tmp = open_chat_db_copy()
     try:
-        since = None
-        if st["last_rowid"] == 0:
-            since = local_to_apple(dt.datetime.now().astimezone()
-                                   - dt.timedelta(days=CONFIG["FIRST_RUN_LOOKBACK_DAYS"]))
-        rows, max_id = [], st["last_rowid"]
-        for rowid, t, text in fetch_messages(conn, st["last_rowid"], since):
+        # iCloud 동기화 중인 문자는 처음엔 본문이 비어 있다가 나중에 채워짐.
+        # 그래서 '마지막 번호 이후'만 읽지 않고, 매번 최근 RECHECK_DAYS일 치를 다시 훑는다.
+        # (이미 기록한 건은 spend_log.csv / 시트에서 id로 걸러지므로 중복 없음)
+        days = CONFIG["FIRST_RUN_LOOKBACK_DAYS"] if st["last_rowid"] == 0 else CONFIG["RECHECK_DAYS"]
+        since = local_to_apple(dt.datetime.now().astimezone() - dt.timedelta(days=days))
+        rows, max_id, empty = [], st["last_rowid"], 0
+        for rowid, t, text in fetch_messages(conn, 0, since):
             max_id = max(max_id, rowid)
+            if not text.strip():
+                empty += 1
+                continue
             p = parse_card_sms(text, t)
             if p:
                 rows.append({"id": rowid, **p})
@@ -313,8 +324,8 @@ def collect():
         conn.close()
         shutil.rmtree(tmp, ignore_errors=True)
 
+    rows = append_csv(rows) if rows else []
     if rows:
-        append_csv(rows)
         if not post_webapp(rows):
             pending = st.get("pending", []) + rows      # 실패분은 다음 실행 때 재전송
             st["pending"] = pending[-500:]
@@ -325,7 +336,8 @@ def collect():
     save_state(st)
     now = dt.datetime.now()
     if rows or st.get("pending") or now.minute < 2:       # 새 내역이 있을 때 + 매시 정각 무렵 1줄(동작 확인용)
-        print(f"[{now:%Y-%m-%d %H:%M}] 신규 카드 내역 {len(rows)}건")
+        print(f"[{now:%Y-%m-%d %H:%M}] 신규 카드 내역 {len(rows)}건"
+              + (f" (본문 대기 중 문자 {empty}건 — 다음 실행 때 다시 확인)" if empty else ""))
 
 
 def scan(n):

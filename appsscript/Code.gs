@@ -51,22 +51,33 @@ function rotateTokens() {
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  if (!auth_(p.token, 'READ_TOKEN')) return out_({ ok: false, error: 'auth' });
+  const cb = p.callback;                       // 사파리 대비 JSONP: ?callback=함수명
+  if (p.w) {                                   // 사파리에서 POST가 막힐 때 쓰는 GET 쓰기 (내용은 POST와 동일)
+    let body;
+    try { body = JSON.parse(p.w); } catch (err) { return out_({ ok: false, error: 'bad json' }, cb); }
+    return out_(write_(body), cb);
+  }
+  if (!auth_(p.token, 'READ_TOKEN')) return out_({ ok: false, error: 'auth' }, cb);
   const from = p.from || '0000-00-00';
   const to = p.to || '9999-12-31';
   return out_({
     ok: true,
     spend: read_('spend', from, to),
     categories: categories_(),
-  });
+  }, cb);
 }
 
 function doPost(e) {
   let body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return out_({ ok: false, error: 'bad json' }); }
-  if (!auth_(body.token, 'WRITE_TOKEN')) return out_({ ok: false, error: 'auth' });
+  return out_(write_(body));
+}
+
+/** 추가·수정·삭제 공통 처리 → 결과 객체 */
+function write_(body) {
+  if (!auth_(body.token, 'WRITE_TOKEN')) return { ok: false, error: 'auth' };
   const kind = body.kind || 'spend';
-  if (!SHEETS[kind]) return out_({ ok: false, error: 'bad kind' });
+  if (!SHEETS[kind]) return { ok: false, error: 'bad kind' };
   const op = body.op || 'add';
 
   const lock = LockService.getScriptLock();
@@ -85,11 +96,11 @@ function doPost(e) {
         .filter(r => !(r.id && seen.has(String(r.id))))                 // id 기준 중복 제거
         .map(r => head.map(h => (r[h] === undefined || r[h] === null) ? '' : r[h]));
       if (rows.length) sh.getRange(last + 1, 1, rows.length, head.length).setValues(rows);
-      return out_({ ok: true, added: rows.length });
+      return ({ ok: true, added: rows.length });
     }
 
     const idx = ids.indexOf(String(body.id));
-    if (!body.id || idx < 0) return out_({ ok: false, error: 'not found' });
+    if (!body.id || idx < 0) return ({ ok: false, error: 'not found' });
     const rowNo = idx + 2;
 
     if (op === 'update') {
@@ -100,14 +111,14 @@ function doPost(e) {
         const c = head.indexOf(k);
         if (c >= 0 && allowed.indexOf(k) >= 0) { sh.getRange(rowNo, c + 1).setValue(fields[k]); n++; }
       });
-      return out_({ ok: true, updated: n });
+      return ({ ok: true, updated: n });
     }
 
     if (op === 'delete') {
       sh.deleteRow(rowNo);
-      return out_({ ok: true, deleted: 1 });
+      return ({ ok: true, deleted: 1 });
     }
-    return out_({ ok: false, error: 'bad op' });
+    return ({ ok: false, error: 'bad op' });
   } finally {
     lock.releaseLock();
   }
@@ -183,7 +194,11 @@ function norm_(h, v) {
   return v;
 }
 
-function out_(obj) {
+function out_(obj, cb) {
+  if (cb && /^[A-Za-z_$][\w$]{0,40}$/.test(cb)) {
+    return ContentService.createTextOutput(cb + '(' + JSON.stringify(obj) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
   return ContentService.createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }

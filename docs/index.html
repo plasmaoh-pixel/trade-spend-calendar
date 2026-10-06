@@ -346,6 +346,22 @@ function gridRange(y, m) {
 }
 
 let loading = false;
+// Apps Script는 가끔(동시 요청·일시 장애·구글 로그인 꼬임) JSON 대신 HTML 오류 페이지를 돌려줌.
+// 그대로 res.json() 하면 사파리에서 "The string did not match the expected pattern." 이 뜸 → 재시도 후 알기 쉬운 메시지로.
+async function apiJSON(url, opts, tries = 3) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    if (i) await new Promise(r => setTimeout(r, 1200 * i));
+    try {
+      const res = await fetch(url, { redirect: 'follow', cache: 'no-store', ...(opts || {}) });
+      const txt = await res.text();
+      try { return JSON.parse(txt); }
+      catch (e) { last = new Error(`서버가 JSON이 아닌 응답을 보냄 (HTTP ${res.status})`); }
+    } catch (e) { last = new Error('네트워크 연결 실패'); }
+    if (opts && opts.method === 'POST') break;          // 쓰기는 중복 저장 방지를 위해 재시도하지 않음
+  }
+  throw last;
+}
 async function load(force, silent) {
   const key = `${S.y}-${S.m}`;
   if (!force && S.cache[key]) { S.data = S.cache[key]; return render(); }
@@ -358,8 +374,7 @@ async function load(force, silent) {
     if (S.token === 'demo') d = demoData(start, end);
     else {
       const url = `${S.api}?token=${encodeURIComponent(S.token)}&from=${ymd(start)}&to=${ymd(end)}&_=${Date.now()}`;
-      const res = await fetch(url, { redirect: 'follow' });
-      d = await res.json();
+      d = await apiJSON(url);
       if (!d.ok) {
         if (d.error === 'auth') return logout('토큰이 올바르지 않습니다.');
         throw new Error(d.error || '응답 오류');
@@ -376,9 +391,9 @@ async function load(force, silent) {
     if (!silent || changed) render();
   } catch (e) {
     if (silent) return;                               // 자동 새로고침 실패는 조용히 무시
-    S.data = { spend: [] };
+    S.data = S.cache[key] || { spend: [] };           // 전에 받아둔 내용이 있으면 그대로 보여줌
     render();
-    $('detail').innerHTML = `<h3>불러오기 실패</h3><p class="empty">${esc(e.message)} — API URL과 네트워크를 확인하세요.</p>`;
+    $('detail').innerHTML = `<h3>불러오기 실패</h3><p class="empty">${esc(e.message)} — 잠시 후 상단 '오늘'이나 새로고침으로 다시 시도해 주세요.</p>`;
   } finally { loading = false; if (!silent) toast(false); }
 }
 
@@ -493,8 +508,7 @@ async function fetchRange(from, to) {
   let d;
   if (S.token === 'demo') d = demoData(new Date(from + 'T00:00:00'), new Date(to + 'T00:00:00'));
   else {
-    const res = await fetch(`${S.api}?token=${encodeURIComponent(S.token)}&from=${from}&to=${to}&_=${Date.now()}`);
-    d = await res.json();
+    d = await apiJSON(`${S.api}?token=${encodeURIComponent(S.token)}&from=${from}&to=${to}&_=${Date.now()}`);
     if (!d.ok) throw new Error(d.error || '응답 오류');
   }
   return (S.range[key] = d.spend || []);
@@ -684,9 +698,8 @@ async function apiWrite(payload) {
   if (S.token === 'demo') return { ok: true };
   const tok = S.wtoken || $('fWtok').value.trim();
   if (!tok) return { ok: false, error: 'need_token' };
-  const res = await fetch(S.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+  const j = await apiJSON(S.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ ...payload, token: tok }) });
-  const j = await res.json();
   if (j.ok && !S.wtoken) { S.wtoken = tok; store.set('tsc_wtoken', tok); }
   if (j.error === 'auth') { S.wtoken = ''; store.del('tsc_wtoken'); $('wtField').classList.remove('hidden'); }
   return j;
